@@ -3,22 +3,28 @@
  * Utility for loading Mixamo characters and animations in Three.js
  *
  * Handles:
- *   - Loading GLB character models with correct scale
- *   - Loading animation clips from separate GLB files
+ *   - Loading GLB/FBX character models with correct scale
+ *   - Loading animation clips from separate GLB/FBX files
  *   - Mixamo name mapping (logical state → Mixamo clip name)
  *   - Procedural placeholder animations for prototyping
  *   - Caching loaded assets to avoid duplicate requests
  *   - Batch loading with progress tracking
  *   - Proper Mixamo skeleton/scale handling
+ *   - Automatic FBX/GLB detection based on file extension
  *
  * Usage:
  *   const loader = new MixamoLoader();
  *   const { model, animations } = await loader.loadCharacter('wolf', '/assets/characters/wolf/');
  *   scene.add(model);
+ *
+ *   // FBX mode (new):
+ *   const { model, animations } = await loader.loadCharacterFBX('gas-mask', '/assets/models/gas-mask/');
+ *   scene.add(model);
  */
 
 import * as THREE from 'three';
 import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 
 // ============================================================
 // TYPES
@@ -1102,7 +1108,8 @@ export function generateAllProceduralAnimations(
 // ============================================================
 
 export class MixamoLoader {
-  private loader: GLTFLoader;
+  private gltfLoader: GLTFLoader;
+  private fbxLoader: FBXLoader;
   private modelCache: Map<string, THREE.Group> = new Map();
   private animationCache: Map<string, THREE.AnimationClip> = new Map();
   private loadingPromises: Map<string, Promise<any>> = new Map();
@@ -1111,7 +1118,8 @@ export class MixamoLoader {
   static readonly SCALE_FACTOR = 0.01;
 
   constructor() {
-    this.loader = new GLTFLoader();
+    this.gltfLoader = new GLTFLoader();
+    this.fbxLoader = new FBXLoader();
   }
 
   // ============================================================
@@ -1119,10 +1127,11 @@ export class MixamoLoader {
   // ============================================================
 
   /**
-   * Load a character model (mesh + skeleton) from a GLB file.
+   * Load a character model (mesh + skeleton) from a GLB or FBX file.
+   * Automatically detects format from file extension.
    * Applies correct scale and shadow settings.
    *
-   * @param url - Full URL to the GLB file
+   * @param url - Full URL to the model file (GLB or FBX)
    * @param options - Loading options
    */
   async loadModel(
@@ -1144,20 +1153,38 @@ export class MixamoLoader {
       return cached.clone();
     }
 
+    const isFBX = url.toLowerCase().endsWith('.fbx');
+
     const promise = new Promise<THREE.Group>((resolve, reject) => {
-      this.loader.load(
-        url,
-        (gltf) => {
-          const model = this.processModel(gltf, options);
-          this.modelCache.set(url, model);
-          resolve(model);
-        },
-        undefined,
-        (error) => {
-          console.error(`[MixamoLoader] Failed to load model: ${url}`, error);
-          reject(error);
-        }
-      );
+      if (isFBX) {
+        this.fbxLoader.load(
+          url,
+          (fbx) => {
+            const model = this.processFBXModel(fbx, options);
+            this.modelCache.set(url, model);
+            resolve(model);
+          },
+          undefined,
+          (error) => {
+            console.error(`[MixamoLoader] Failed to load FBX model: ${url}`, error);
+            reject(error);
+          }
+        );
+      } else {
+        this.gltfLoader.load(
+          url,
+          (gltf) => {
+            const model = this.processModel(gltf, options);
+            this.modelCache.set(url, model);
+            resolve(model);
+          },
+          undefined,
+          (error) => {
+            console.error(`[MixamoLoader] Failed to load GLB model: ${url}`, error);
+            reject(error);
+          }
+        );
+      }
     });
 
     this.loadingPromises.set(url, promise);
@@ -1219,15 +1246,89 @@ export class MixamoLoader {
     return model;
   }
 
+  /**
+   * Process a loaded FBX result into a proper Three.js model.
+   * Strips Mixamo "mixamorig:" prefix from bone names.
+   */
+  private processFBXModel(
+    fbx: THREE.Group,
+    options?: {
+      scale?: number;
+      castShadow?: boolean;
+      receiveShadow?: boolean;
+    }
+  ): THREE.Group {
+    const scale = options?.scale ?? MixamoLoader.SCALE_FACTOR;
+    const castShadow = options?.castShadow ?? true;
+    const receiveShadow = options?.receiveShadow ?? true;
+
+    // Apply Mixamo scale (cm → m)
+    fbx.scale.set(scale, scale, scale);
+
+    // Strip Mixamo prefix from skeleton bones and enable shadows
+    fbx.traverse((child) => {
+      // Fix skeleton bone names
+      if (child instanceof THREE.Bone && child.name.startsWith('mixamorig:')) {
+        child.name = child.name.replace('mixamorig:', '');
+      }
+
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = castShadow;
+        child.receiveShadow = receiveShadow;
+
+        // Convert materials for PBR pipeline
+        if (child.material) {
+          const materials = Array.isArray(child.material)
+            ? child.material
+            : [child.material];
+
+          const newMaterials: THREE.Material[] = [];
+          for (const mat of materials) {
+            if (mat instanceof THREE.MeshPhongMaterial) {
+              const std = new THREE.MeshStandardMaterial({
+                color: mat.color,
+                map: mat.map,
+                normalMap: mat.normalMap,
+                emissive: mat.emissive,
+                emissiveMap: mat.emissiveMap,
+                transparent: mat.transparent,
+                opacity: mat.opacity,
+                roughness: 0.7,
+                metalness: 0.1,
+              });
+              newMaterials.push(std);
+            } else {
+              newMaterials.push(mat);
+            }
+          }
+
+          child.material = newMaterials.length === 1 ? newMaterials[0] : newMaterials;
+        }
+      }
+
+      // Also fix SkinnedMesh skeleton bone names
+      if (child instanceof THREE.SkinnedMesh && child.skeleton) {
+        for (const bone of child.skeleton.bones) {
+          if (bone.name.startsWith('mixamorig:')) {
+            bone.name = bone.name.replace('mixamorig:', '');
+          }
+        }
+      }
+    });
+
+    return fbx;
+  }
+
   // ============================================================
   // ANIMATION LOADING
   // ============================================================
 
   /**
-   * Load a single animation clip from a GLB file.
-   * The GLB should contain only the animation (no mesh needed).
+   * Load a single animation clip from a GLB or FBX file.
+   * The file should contain only the animation (no mesh needed for GLB,
+   * or "Without Skin" export for FBX).
    *
-   * @param url - Full URL to the GLB animation file
+   * @param url - Full URL to the animation file (GLB or FBX)
    * @param name - Name to assign to the clip
    */
   async loadAnimation(url: string, name: string): Promise<THREE.AnimationClip> {
@@ -1241,30 +1342,58 @@ export class MixamoLoader {
       return await this.loadingPromises.get(url);
     }
 
+    const isFBX = url.toLowerCase().endsWith('.fbx');
+
     const promise = new Promise<THREE.AnimationClip>((resolve, reject) => {
-      this.loader.load(
-        url,
-        (gltf) => {
-          if (gltf.animations.length === 0) {
-            reject(new Error(`No animations found in ${url}`));
-            return;
+      if (isFBX) {
+        this.fbxLoader.load(
+          url,
+          (fbx) => {
+            if (fbx.animations.length === 0) {
+              reject(new Error(`No animations found in FBX: ${url}`));
+              return;
+            }
+
+            const clip = fbx.animations[0];
+            clip.name = name;
+
+            // Fix Mixamo bone names (FBX uses "mixamorig:" prefix)
+            this.fixMixamoBoneNames(clip);
+
+            this.animationCache.set(name, clip);
+            resolve(clip);
+          },
+          undefined,
+          (error) => {
+            console.error(`[MixamoLoader] Failed to load FBX animation: ${url}`, error);
+            reject(error);
           }
+        );
+      } else {
+        this.gltfLoader.load(
+          url,
+          (gltf) => {
+            if (gltf.animations.length === 0) {
+              reject(new Error(`No animations found in GLB: ${url}`));
+              return;
+            }
 
-          const clip = gltf.animations[0];
-          clip.name = name;
+            const clip = gltf.animations[0];
+            clip.name = name;
 
-          // Fix Mixamo bone names if needed (sometimes they have "mixamorig:" prefix)
-          this.fixMixamoBoneNames(clip);
+            // Fix Mixamo bone names if needed
+            this.fixMixamoBoneNames(clip);
 
-          this.animationCache.set(name, clip);
-          resolve(clip);
-        },
-        undefined,
-        (error) => {
-          console.error(`[MixamoLoader] Failed to load animation: ${url}`, error);
-          reject(error);
-        }
-      );
+            this.animationCache.set(name, clip);
+            resolve(clip);
+          },
+          undefined,
+          (error) => {
+            console.error(`[MixamoLoader] Failed to load GLB animation: ${url}`, error);
+            reject(error);
+          }
+        );
+      }
     });
 
     this.loadingPromises.set(url, promise);
@@ -1540,8 +1669,22 @@ export class MixamoLoader {
   /**
    * Get the GLTFLoader instance for custom loading needs.
    */
-  getLoader(): GLTFLoader {
-    return this.loader;
+  getGLTFLoader(): GLTFLoader {
+    return this.gltfLoader;
+  }
+
+  /**
+   * Get the FBXLoader instance for custom loading needs.
+   */
+  getFBXLoader(): FBXLoader {
+    return this.fbxLoader;
+  }
+
+  /**
+   * Get the appropriate loader for a given file URL.
+   */
+  getLoaderForFile(url: string): GLTFLoader | FBXLoader {
+    return url.toLowerCase().endsWith('.fbx') ? this.fbxLoader : this.gltfLoader;
   }
 
   /**

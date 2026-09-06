@@ -603,7 +603,7 @@ export const GAS_MASK_CONFIG: CharacterModelConfig = {
 
   // ── Paths ──
   modelPath: 'assets/models/gas-mask',
-  modelFile: 'model.glb',
+  modelFile: 'model.fbx',
 
   // ── Scale & Dimensions ──
   scale: 1.0,
@@ -623,38 +623,45 @@ export const GAS_MASK_CONFIG: CharacterModelConfig = {
     MATERIAL_PRESETS.GAS_MASK.LENSES,
   ],
 
-  // ── Animations ──
+  // ── Animations (FBX from Mixamo packs) ──
+  // Animations are loaded from animation pack directories,
+  // not from the model directory. The file paths here are relative
+  // to the animation pack directory.
   animations: [
-    // Core locomotion
-    { name: 'idle',        file: 'idle.glb',         loop: THREE.LoopRepeat },
-    { name: 'walk',        file: 'walk.glb',         loop: THREE.LoopRepeat, timeScale: 1.0 },
-    { name: 'run',         file: 'run.glb',          loop: THREE.LoopRepeat, timeScale: 1.0 },
+    // Core locomotion (Pro Rifle Pack)
+    { name: 'idle',        file: 'idle.fbx',              loop: THREE.LoopRepeat },
+    { name: 'walk',        file: 'walk forward.fbx',      loop: THREE.LoopRepeat, timeScale: 1.0 },
+    { name: 'run',         file: 'run forward.fbx',       loop: THREE.LoopRepeat, timeScale: 1.0 },
+    { name: 'sprint',      file: 'sprint forward.fbx',    loop: THREE.LoopRepeat, timeScale: 1.0 },
 
-    // Crouch
-    { name: 'crouchIdle',  file: 'crouch_idle.glb',  loop: THREE.LoopRepeat },
-    { name: 'crouchWalk',  file: 'crouch_walk.glb',  loop: THREE.LoopRepeat, timeScale: 0.9 },
+    // Crouch (Pro Rifle Pack)
+    { name: 'crouchIdle',  file: 'idle crouching.fbx',    loop: THREE.LoopRepeat },
+    { name: 'crouchWalk',  file: 'walk crouching forward.fbx', loop: THREE.LoopRepeat, timeScale: 0.85 },
 
-    // Prone
-    { name: 'proneIdle',   file: 'prone_idle.glb',   loop: THREE.LoopRepeat },
-    { name: 'proneCrawl',  file: 'prone_crawl.glb',  loop: THREE.LoopRepeat, timeScale: 0.7 },
+    // Rifle Aim (Pro Rifle Pack)
+    { name: 'rifleIdle',   file: 'idle aiming.fbx',       loop: THREE.LoopRepeat },
 
-    // Combat
-    { name: 'rifleIdle',   file: 'rifle_idle.glb',   loop: THREE.LoopRepeat },
-    { name: 'rifleWalk',   file: 'rifle_walk.glb',   loop: THREE.LoopRepeat },
-    { name: 'rifleRun',    file: 'rifle_run.glb',    loop: THREE.LoopRepeat },
-    { name: 'rifleShoot',  file: 'rifle_shoot.glb',  loop: THREE.LoopOnce, clampWhenFinished: true },
-    { name: 'rifleReload', file: 'rifle_reload.glb',  loop: THREE.LoopOnce, clampWhenFinished: true },
+    // Combat (Basic Shooter Pack — better quality for these)
+    { name: 'rifleShoot',  file: 'firing rifle.fbx',     loop: THREE.LoopOnce, clampWhenFinished: true },
+    { name: 'rifleReload', file: 'reloading.fbx',         loop: THREE.LoopOnce, clampWhenFinished: true },
+    { name: 'hitReaction', file: 'hit reaction.fbx',      loop: THREE.LoopOnce, clampWhenFinished: true },
+    { name: 'grenade',     file: 'toss grenade.fbx',      loop: THREE.LoopOnce, clampWhenFinished: true },
 
-    // Reactions
-    { name: 'death',       file: 'death.glb',        loop: THREE.LoopOnce, clampWhenFinished: true },
-    { name: 'hitFront',    file: 'hit_front.glb',     loop: THREE.LoopOnce, clampWhenFinished: true },
-    { name: 'hitBack',     file: 'hit_back.glb',      loop: THREE.LoopOnce, clampWhenFinished: true },
+    // Death (Pro Rifle Pack — multiple directions)
+    { name: 'death',       file: 'death from front.fbx',  loop: THREE.LoopOnce, clampWhenFinished: true },
 
-    // Social / Ambient
-    { name: 'smoking',     file: 'smoking.glb',      loop: THREE.LoopRepeat },
-    { name: 'talking',     file: 'talking.glb',      loop: THREE.LoopRepeat },
-    { name: 'sitting',     file: 'sitting.glb',      loop: THREE.LoopRepeat },
-    { name: 'radio',       file: 'radio.glb',        loop: THREE.LoopRepeat },
+    // Walk transitions (Shooter Pack)
+    { name: 'walkStart',   file: 'start walking.fbx',     loop: THREE.LoopOnce, clampWhenFinished: true },
+    { name: 'walkStop',    file: 'stop walking.fbx',      loop: THREE.LoopOnce, clampWhenFinished: true },
+
+    // Turns (Pro Rifle Pack)
+    { name: 'turnLeft',    file: 'turn 90 left.fbx',      loop: THREE.LoopOnce, clampWhenFinished: true },
+    { name: 'turnRight',   file: 'turn 90 right.fbx',     loop: THREE.LoopOnce, clampWhenFinished: true },
+
+    // Jump (Pro Rifle Pack)
+    { name: 'jumpUp',      file: 'jump up.fbx',           loop: THREE.LoopOnce, clampWhenFinished: true },
+    { name: 'jumpLoop',    file: 'jump loop.fbx',         loop: THREE.LoopRepeat },
+    { name: 'jumpDown',    file: 'jump down.fbx',         loop: THREE.LoopOnce, clampWhenFinished: true },
   ],
   useProceduralFallback: true,
 
@@ -695,7 +702,7 @@ export const SWAT_GUY_CONFIG: CharacterModelConfig = {
 
   // ── Paths ──
   modelPath: 'assets/models/swat-guy',
-  modelFile: 'model.glb',
+  modelFile: 'model.fbx',
 
   // ── Scale & Dimensions ──
   scale: 1.0,
@@ -715,39 +722,42 @@ export const SWAT_GUY_CONFIG: CharacterModelConfig = {
     MATERIAL_PRESETS.SWAT.VISOR,
   ],
 
-  // ── Animations ──
-  // Same animation set structure as heroes — different GLB files
+  // ── Animations (FBX from Mixamo packs) ──
+  // Same animation set as hero — enemies share the same rig/animations
   animations: [
-    // Core locomotion
-    { name: 'idle',        file: 'idle.glb',         loop: THREE.LoopRepeat },
-    { name: 'walk',        file: 'walk.glb',         loop: THREE.LoopRepeat, timeScale: 1.0 },
-    { name: 'run',         file: 'run.glb',          loop: THREE.LoopRepeat, timeScale: 1.0 },
+    // Core locomotion (Pro Rifle Pack)
+    { name: 'idle',        file: 'idle.fbx',              loop: THREE.LoopRepeat },
+    { name: 'walk',        file: 'walk forward.fbx',      loop: THREE.LoopRepeat, timeScale: 1.0 },
+    { name: 'run',         file: 'run forward.fbx',       loop: THREE.LoopRepeat, timeScale: 1.0 },
+    { name: 'sprint',      file: 'sprint forward.fbx',    loop: THREE.LoopRepeat, timeScale: 1.0 },
 
-    // Crouch
-    { name: 'crouchIdle',  file: 'crouch_idle.glb',  loop: THREE.LoopRepeat },
-    { name: 'crouchWalk',  file: 'crouch_walk.glb',  loop: THREE.LoopRepeat, timeScale: 0.9 },
+    // Crouch (Pro Rifle Pack)
+    { name: 'crouchIdle',  file: 'idle crouching.fbx',    loop: THREE.LoopRepeat },
+    { name: 'crouchWalk',  file: 'walk crouching forward.fbx', loop: THREE.LoopRepeat, timeScale: 0.85 },
 
-    // Prone
-    { name: 'proneIdle',   file: 'prone_idle.glb',   loop: THREE.LoopRepeat },
-    { name: 'proneCrawl',  file: 'prone_crawl.glb',  loop: THREE.LoopRepeat, timeScale: 0.7 },
+    // Rifle Aim (Pro Rifle Pack)
+    { name: 'rifleIdle',   file: 'idle aiming.fbx',       loop: THREE.LoopRepeat },
 
-    // Combat
-    { name: 'rifleIdle',   file: 'rifle_idle.glb',   loop: THREE.LoopRepeat },
-    { name: 'rifleWalk',   file: 'rifle_walk.glb',   loop: THREE.LoopRepeat },
-    { name: 'rifleRun',    file: 'rifle_run.glb',    loop: THREE.LoopRepeat },
-    { name: 'rifleShoot',  file: 'rifle_shoot.glb',  loop: THREE.LoopOnce, clampWhenFinished: true },
-    { name: 'rifleReload', file: 'rifle_reload.glb',  loop: THREE.LoopOnce, clampWhenFinished: true },
+    // Combat (Basic Shooter Pack)
+    { name: 'rifleShoot',  file: 'firing rifle.fbx',     loop: THREE.LoopOnce, clampWhenFinished: true },
+    { name: 'rifleReload', file: 'reloading.fbx',         loop: THREE.LoopOnce, clampWhenFinished: true },
+    { name: 'hitReaction', file: 'hit reaction.fbx',      loop: THREE.LoopOnce, clampWhenFinished: true },
 
-    // Reactions
-    { name: 'death',       file: 'death.glb',        loop: THREE.LoopOnce, clampWhenFinished: true },
-    { name: 'hitFront',    file: 'hit_front.glb',     loop: THREE.LoopOnce, clampWhenFinished: true },
-    { name: 'hitBack',     file: 'hit_back.glb',      loop: THREE.LoopOnce, clampWhenFinished: true },
+    // Death (Pro Rifle Pack)
+    { name: 'death',       file: 'death from front.fbx',  loop: THREE.LoopOnce, clampWhenFinished: true },
 
-    // Social / Ambient (enemies may idle in these states)
-    { name: 'smoking',     file: 'smoking.glb',      loop: THREE.LoopRepeat },
-    { name: 'talking',     file: 'talking.glb',      loop: THREE.LoopRepeat },
-    { name: 'sitting',     file: 'sitting.glb',      loop: THREE.LoopRepeat },
-    { name: 'radio',       file: 'radio.glb',        loop: THREE.LoopRepeat },
+    // Walk transitions (Shooter Pack)
+    { name: 'walkStart',   file: 'start walking.fbx',     loop: THREE.LoopOnce, clampWhenFinished: true },
+    { name: 'walkStop',    file: 'stop walking.fbx',      loop: THREE.LoopOnce, clampWhenFinished: true },
+
+    // Turns (Pro Rifle Pack)
+    { name: 'turnLeft',    file: 'turn 90 left.fbx',      loop: THREE.LoopOnce, clampWhenFinished: true },
+    { name: 'turnRight',   file: 'turn 90 right.fbx',     loop: THREE.LoopOnce, clampWhenFinished: true },
+
+    // Jump (Pro Rifle Pack)
+    { name: 'jumpUp',      file: 'jump up.fbx',           loop: THREE.LoopOnce, clampWhenFinished: true },
+    { name: 'jumpLoop',    file: 'jump loop.fbx',         loop: THREE.LoopRepeat },
+    { name: 'jumpDown',    file: 'jump down.fbx',         loop: THREE.LoopOnce, clampWhenFinished: true },
   ],
   useProceduralFallback: true,
 
@@ -863,74 +873,72 @@ export function mergeModelConfig(
  *
  * public/
  * └── assets/
- *     └── models/
- *         ├── gas-mask/
- *         │   ├── model.glb              ← Character mesh + skeleton
- *         │   ├── idle.glb               ← Animation: Standing Idle
- *         │   ├── walk.glb               ← Animation: Walking
- *         │   ├── run.glb                ← Animation: Running
- *         │   ├── crouch_idle.glb        ← Animation: Crouching Idle
- *         │   ├── crouch_walk.glb        ← Animation: Crouching Walk
- *         │   ├── prone_idle.glb         ← Animation: Prone Idle
- *         │   ├── prone_crawl.glb        ← Animation: Prone Crawl
- *         │   ├── rifle_idle.glb         ← Animation: Rifle Aiming
- *         │   ├── rifle_walk.glb         ← Animation: Rifle Walking
- *         │   ├── rifle_run.glb          ← Animation: Rifle Running
- *         │   ├── rifle_shoot.glb        ← Animation: Rifle Shooting
- *         │   ├── rifle_reload.glb       ← Animation: Rifle Reloading
- *         │   ├── death.glb              ← Animation: Death Fall
- *         │   ├── hit_front.glb          ← Animation: Hit Front
- *         │   ├── hit_back.glb           ← Animation: Hit Back
- *         │   ├── smoking.glb            ← Animation: Smoking
- *         │   ├── talking.glb            ← Animation: Talking
- *         │   ├── sitting.glb            ← Animation: Sitting
- *         │   └── radio.glb              ← Animation: Using Radio
+ *     ├── models/
+ *     │   ├── gas-mask/
+ *     │   │   └── model.fbx              ← Character mesh + skeleton
+ *     │   └── swat-guy/
+ *     │       └── model.fbx              ← Character mesh + skeleton
+ *     │
+ *     └── animations/
+ *         ├── Pro Rifle Pack/            ← PRIMARY animation source
+ *         │   ├── Ch15_nonPBR.fbx        ← Reference model (skip)
+ *         │   ├── idle.fbx
+ *         │   ├── idle aiming.fbx
+ *         │   ├── idle crouching.fbx
+ *         │   ├── idle crouching aiming.fbx
+ *         │   ├── walk forward.fbx       ← (8-way directional variants)
+ *         │   ├── walk backward.fbx
+ *         │   ├── walk left.fbx
+ *         │   ├── walk right.fbx
+ *         │   ├── run forward.fbx        ← (8-way directional variants)
+ *         │   ├── sprint forward.fbx     ← (8-way directional variants)
+ *         │   ├── walk crouching forward.fbx ← (8-way directional)
+ *         │   ├── turn 90 left.fbx
+ *         │   ├── turn 90 right.fbx
+ *         │   ├── jump up.fbx
+ *         │   ├── jump loop.fbx
+ *         │   ├── jump down.fbx
+ *         │   ├── death from front.fbx
+ *         │   ├── death from front headshot.fbx
+ *         │   └── ... (50+ animation files)
  *         │
- *         └── swat-guy/
- *             ├── model.glb              ← Character mesh + skeleton
- *             ├── idle.glb               ← (same animation set)
- *             ├── walk.glb
- *             ├── run.glb
- *             ├── crouch_idle.glb
- *             ├── crouch_walk.glb
- *             ├── prone_idle.glb
- *             ├── prone_crawl.glb
- *             ├── rifle_idle.glb
- *             ├── rifle_walk.glb
- *             ├── rifle_run.glb
- *             ├── rifle_shoot.glb
- *             ├── rifle_reload.glb
- *             ├── death.glb
- *             ├── hit_front.glb
- *             ├── hit_back.glb
- *             ├── smoking.glb
- *             ├── talking.glb
- *             ├── sitting.glb
- *             └── radio.glb
+ *         ├── Basic Shooter Pack/        ← Combat actions (fire, reload, hit)
+ *         │   ├── firing rifle.fbx
+ *         │   ├── reloading.fbx
+ *         │   ├── hit reaction.fbx
+ *         │   └── toss grenade.fbx
+ *         │
+ *         ├── Shooter Pack/              ← Transitions (start/stop walk)
+ *         │   ├── start walking.fbx
+ *         │   ├── stop walking.fbx
+ *         │   └── walking to dying.fbx
+ *         │
+ *         ├── Rifle 8-Way Locomotion Pack/ ← Secondary locomotion
+ *         ├── Lite Rifle Pack/           ← Fallback locomotion
+ *         ├── Slim Shooter Pack/         ← Compact rifle set
+ *         └── PistolHandgun Locomotion Pack/ ← Pistol alternate
  *
  * MIXAMO DOWNLOAD MAPPING:
  * ─────────────────────────
- * Mixamo Animation Name  →  File Name in This Config
+ * Game State              →  FBX File (from best pack)
  * ───────────────────────────────────────────────────
- * Standing Idle          →  idle.glb
- * Walking                →  walk.glb
- * Running                →  run.glb
- * Crouching Idle         →  crouch_idle.glb
- * Crouching Walk         →  crouch_walk.glb
- * Prone Idle             →  prone_idle.glb
- * Prone Crawl            →  prone_crawl.glb
- * Rifle Aiming           →  rifle_idle.glb
- * Rifle Walking          →  rifle_walk.glb
- * Rifle Running          →  rifle_run.glb
- * Rifle Shooting         →  rifle_shoot.glb
- * Rifle Reloading        →  rifle_reload.glb
- * Death Fall             →  death.glb
- * Hit Front              →  hit_front.glb
- * Hit Back               →  hit_back.glb
- * Smoking                →  smoking.glb
- * Talking                →  talking.glb
- * Sitting                →  sitting.glb
- * Using Radio            →  radio.glb
+ * idle                    →  Pro Rifle Pack/idle.fbx
+ * walkForward             →  Pro Rifle Pack/walk forward.fbx
+ * runForward              →  Pro Rifle Pack/run forward.fbx
+ * sprintForward           →  Pro Rifle Pack/sprint forward.fbx
+ * crouchIdle              →  Pro Rifle Pack/idle crouching.fbx
+ * crouchWalkForward       →  Pro Rifle Pack/walk crouching forward.fbx
+ * rifleIdle               →  Pro Rifle Pack/idle aiming.fbx
+ * rifleShoot              →  Basic Shooter Pack/firing rifle.fbx
+ * rifleReload             →  Basic Shooter Pack/reloading.fbx
+ * hitReaction             →  Basic Shooter Pack/hit reaction.fbx
+ * grenade                 →  Basic Shooter Pack/toss grenade.fbx
+ * death                   →  Pro Rifle Pack/death from front.fbx
+ * walkStart               →  Shooter Pack/start walking.fbx
+ * walkStop                →  Shooter Pack/stop walking.fbx
+ * turnLeft                →  Pro Rifle Pack/turn 90 left.fbx
+ * turnRight               →  Pro Rifle Pack/turn 90 right.fbx
+ * jumpUp                  →  Pro Rifle Pack/jump up.fbx
  */
 
 // ============================================================
