@@ -17,6 +17,9 @@ import { DebugMode } from '../debug/DebugMode';
 import { MissionManager } from '../systems/MissionManager';
 import { UIManager } from '../ui/UIManager';
 import { AudioManager } from '../utils/AudioManager';
+import { MixamoLoader, createCharacterMixer } from '../utils/MixamoLoader';
+import { FBXAnimationLoader, createFBXCharacterMixer } from '../utils/FBXAnimationLoader';
+import { GAS_MASK_CONFIG, SWAT_GUY_CONFIG, MODEL_CONFIGS } from '../config/modelConfig';
 
 // ============================================================
 // TYPES
@@ -95,6 +98,15 @@ export class GameEngine {
   
   // Active character
   private activeCharacter: 'wolf' | 'falcon' = 'wolf';
+
+  // ── FBX Model Loading ──
+  private mixamoLoader: MixamoLoader;
+  private fbxLoader: FBXAnimationLoader;
+  private fbxModelsLoaded: boolean = false;
+  private fbxModels: Map<string, THREE.Group> = new Map();
+  private fbxAnimations: Map<string, Map<string, THREE.AnimationClip>> = new Map();
+  private fbxMixers: Map<string, THREE.AnimationMixer> = new Map();
+  private fbxLoadPromise: Promise<void> | null = null;
 
   // Current mission ID (1 = Desert Dawn, 2 = Iron Rain)
   private currentMissionId: number = 1;
@@ -316,6 +328,8 @@ export class GameEngine {
     
     // Initialize systems
     this.audioManager = new AudioManager();
+    this.mixamoLoader = new MixamoLoader();
+    this.fbxLoader = new FBXAnimationLoader();
     this.player = new Player(this.scene, this.config);
     this.player.setCanvas(this.canvas);
     this.player.setShootCallback(() => this.handleShoot());
@@ -446,6 +460,134 @@ export class GameEngine {
     this.createNightVisionOverlay();
     this.setupEventListeners();
     this.setupGameOverListener();
+
+    // ── Start async FBX model loading (non-blocking) ──
+    this.fbxLoadPromise = this.loadFBXCharacterModels();
+  }
+
+  // ============================================================
+  // FBX MODEL LOADING — Async initialization
+  // ============================================================
+
+  /**
+   * Asynchronously loads FBX character models and their animations.
+   * This runs in the background while the game starts up with procedural models.
+   * When loading completes, the loaded models become available for use.
+   *
+   * Loading chain: FBX → GLB → procedural fallback
+   * Each step has full error handling and progress logging.
+   */
+  private async loadFBXCharacterModels(): Promise<void> {
+    console.log('[GameEngine] Starting FBX character model loading...');
+
+    const configs = [GAS_MASK_CONFIG, SWAT_GUY_CONFIG];
+
+    for (const config of configs) {
+      const modelUrl = `${config.modelPath}/${config.modelFile}`;
+      console.log(`[GameEngine] Loading FBX model: ${config.name} from ${modelUrl}`);
+
+      try {
+        // Load the FBX model with fallback
+        const modelResult = await this.mixamoLoader.loadModelWithFallback(modelUrl, {
+          scale: config.scale,
+          castShadow: config.castShadow,
+          receiveShadow: config.receiveShadow,
+        });
+
+        if (modelResult) {
+          this.fbxModels.set(config.name, modelResult);
+          console.log(`[GameEngine] FBX model loaded: ${config.name} (${modelResult.children.length} children)`);
+
+          // Load animations from pack directories
+          const animDefs = config.animations;
+          const animPromises: Promise<void>[] = [];
+
+          // Try loading from known pack directories
+          const packPaths = [
+            '/assets/animations/Pro Rifle Pack',
+            '/assets/animations/Basic Shooter Pack',
+            '/assets/animations/Shooter Pack',
+          ];
+
+          const animations = new Map<string, THREE.AnimationClip>();
+
+          for (const packPath of packPaths) {
+            for (const animDef of animDefs) {
+              const url = `${packPath}/${animDef.file}`;
+              animPromises.push(
+                this.mixamoLoader.loadAnimationWithFallback(url, animDef.name).then((clip) => {
+                  if (clip) {
+                    animations.set(animDef.name, clip);
+                  }
+                })
+              );
+            }
+          }
+
+          await Promise.allSettled(animPromises);
+
+          if (animations.size > 0) {
+            this.fbxAnimations.set(config.name, animations);
+            console.log(`[GameEngine] FBX animations loaded for ${config.name}: ${animations.size} clips`);
+
+            // Create animation mixer for this model
+            const { mixer } = createCharacterMixer(modelResult, animations);
+            this.fbxMixers.set(config.name, mixer);
+          } else {
+            console.warn(`[GameEngine] No FBX animations loaded for ${config.name} — using procedural`);
+          }
+        }
+      } catch (err) {
+        console.warn(`[GameEngine] FBX loading failed for ${config.name}:`, err);
+        console.log(`[GameEngine] ${config.name} will use procedural models`);
+      }
+    }
+
+    this.fbxModelsLoaded = true;
+    console.log('[GameEngine] FBX character model loading complete');
+    console.log(`[GameEngine] Available FBX models: ${[...this.fbxModels.keys()].join(', ') || 'none'}`);
+    console.log(`[GameEngine] Available FBX animations: ${[...this.fbxAnimations.entries()].map(([k, v]) => `${k}(${v.size})`).join(', ') || 'none'}`);
+  }
+
+  /**
+   * Check if FBX models are loaded and available.
+   */
+  public isFBXLoaded(): boolean {
+    return this.fbxModelsLoaded;
+  }
+
+  /**
+   * Get a loaded FBX model by character name.
+   * Returns undefined if not loaded yet.
+   */
+  public getFBXModel(characterName: string): THREE.Group | undefined {
+    return this.fbxModels.get(characterName);
+  }
+
+  /**
+   * Get loaded FBX animations for a character.
+   * Returns undefined if not loaded yet.
+   */
+  public getFBXAnimations(characterName: string): Map<string, THREE.AnimationClip> | undefined {
+    return this.fbxAnimations.get(characterName);
+  }
+
+  /**
+   * Get the animation mixer for a loaded FBX character.
+   * Returns undefined if not loaded yet.
+   */
+  public getFBXMixer(characterName: string): THREE.AnimationMixer | undefined {
+    return this.fbxMixers.get(characterName);
+  }
+
+  /**
+   * Wait for all FBX models to finish loading.
+   * Useful for code that needs to ensure models are available.
+   */
+  public async waitForFBXLoad(): Promise<void> {
+    if (this.fbxLoadPromise) {
+      await this.fbxLoadPromise;
+    }
   }
 
   // ============================================================
@@ -6843,6 +6985,27 @@ export class GameEngine {
     // Clean up player
     this.player.dispose();
 
+    // ── Clean up FBX models and animations ──
+    this.mixamoLoader.dispose();
+    this.fbxLoader.dispose();
+    for (const [name, model] of this.fbxModels) {
+      model.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry?.dispose();
+          if (Array.isArray(child.material)) {
+            child.material.forEach((m) => m.dispose());
+          } else {
+            child.material?.dispose();
+          }
+        }
+      });
+      this.scene.remove(model);
+    }
+    this.fbxModels.clear();
+    this.fbxAnimations.clear();
+    this.fbxMixers.clear();
+    console.log('[GameEngine] FBX resources cleaned up');
+
     // Clean up bullet trails (dispose pool objects)
     this.activeBulletTrails = [];
     for (const t of this.tracerPool) {
@@ -7036,6 +7199,13 @@ export class GameEngine {
 
     // Update atmospheric dust particles
     this.updateDustParticles(delta);
+
+    // ── Update FBX animation mixers (if loaded) ──
+    if (this.fbxModelsLoaded) {
+      for (const [, mixer] of this.fbxMixers) {
+        mixer.update(delta);
+      }
+    }
 
     // Debug: highlight stuck enemies
     this.updateStuckEnemyDebug();

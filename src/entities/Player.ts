@@ -3717,11 +3717,11 @@ export class Player {
   private collidersRef: THREE.Mesh[] = [];
 
   /** Follow distance constant. Teammate maintains this behind the player. */
-  private readonly TEAMMATE_FOLLOW_DIST: number = 3.5;
+  private readonly TEAMMATE_FOLLOW_DIST: number = 4.0;
   /** Distance at which teammate starts moving to catch up (> this = move). */
-  private readonly TEAMMATE_CATCHUP_DIST: number = 4.0;
-  /** Distance at which teammate stops and idles (< this = stop). */
-  private readonly TEAMMATE_IDLE_DIST: number = 3.0;
+  private readonly TEAMMATE_CATCHUP_DIST: number = 5.5;
+  /** Distance at which teammate stops and idles (measured from player, not follow target). */
+  private readonly TEAMMATE_IDLE_DIST: number = 5.0;
   /** Maximum distance before teammate starts running to catch up. */
   private readonly TEAMMATE_RUN_THRESHOLD: number = 6.0;
   /** Speed multiplier when running to catch up. */
@@ -4009,13 +4009,16 @@ export class Player {
   // ────────────────────────────────────────────────────────
 
   /**
-   * Follow active character at 3-4 units behind, pathfinding around obstacles.
+   * Follow active character at 4 units behind, pathfinding around obstacles.
    * 
-   * Distance management:
+   * Distance management (measured from PLAYER, not follow target):
+   *   - Within 5 units of player: STOP completely and show idle animation
+   *   - > 5 units: Resume following at appropriate speed
+   * 
+   * Speed tiers (based on distance to follow target):
    *   - > 6 units: SPRINT to catch up (speed = 7)
    *   - 4-6 units: WALK to follow (speed = 4.5)
    *   - 3-4 units: MAINTAIN distance (slow approach if needed)
-   *   - < 3 units: STOP and show idle animation
    * 
    * Polish:
    *   - Smooth velocity-based acceleration/deceleration (no instant stops)
@@ -4073,7 +4076,10 @@ export class Player {
     // FOLLOW RESUME DELAY — 0.5s delay after idle before moving
     // ═══════════════════════════════════════════════════════════════
     
-    const isWithinIdleRange = distToFollow <= this.TEAMMATE_IDLE_DIST;
+    // FIX: Use direct player distance for idle check, not follow-target distance.
+    // This ensures teammate stops when within 5 units of the PLAYER, not the
+    // theoretical follow position behind the player.
+    const isWithinIdleRange = distToPlayer <= this.TEAMMATE_IDLE_DIST;
     
     if (isWithinIdleRange) {
       // ── CLOSE ENOUGH: Smoothly decelerate to stop and idle ──
@@ -4916,7 +4922,8 @@ export class Player {
   /**
    * FIND NEAREST COVER (Take Cover command):
    *   1. Search all colliders within 15 units of teammate position
-   *   2. Filter for waist-high objects (height < 1.5 units) or partial cover
+   *   2. Filter for objects with minimum height (0.3 units) — walls, containers,
+   *      HESCO barriers, rocks, etc. all qualify as cover
    *   3. Select the closest one that also has LOS to player (teammate can still see player)
    *   4. If no suitable cover found, teammate stays in place and crouches
    */
@@ -4932,9 +4939,11 @@ export class Player {
       const distToTeammate = fromPos.distanceTo(boxCenter);
       if (distToTeammate > this.TEAMMATE_COVER_RANGE) continue;
 
-      // ── FILTER 2: Waist-high objects (height < 1.5 units) ──
+      // ── FILTER 2: Object must have some minimum height (0.3 units) ──
+      // No upper height limit — any tall object (walls, containers, barriers)
+      // provides cover by blocking line-of-sight from the player's perspective.
       const objHeight = box.max.y - box.min.y;
-      if (objHeight < 0.3 || objHeight >= 1.5) continue; // Too small or too tall
+      if (objHeight < 0.3) continue; // Too small to provide cover
 
       // ── FILTER 3: Must have some horizontal extent (not a tiny object) ──
       const boxWidth = box.max.x - box.min.x;

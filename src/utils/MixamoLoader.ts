@@ -11,6 +11,7 @@
  *   - Batch loading with progress tracking
  *   - Proper Mixamo skeleton/scale handling
  *   - Automatic FBX/GLB detection based on file extension
+ *   - Full fallback chain: FBX → GLB → procedural
  *
  * Usage:
  *   const loader = new MixamoLoader();
@@ -20,6 +21,13 @@
  *   // FBX mode (new):
  *   const { model, animations } = await loader.loadCharacterFBX('gas-mask', '/assets/models/gas-mask/');
  *   scene.add(model);
+ *
+ *   // With full fallback:
+ *   const { model, animations } = await loader.loadCharacterWithFBXFallback(
+ *     'gas-mask',
+ *     '/assets/models/gas-mask/',
+ *     '/assets/animations/Pro Rifle Pack'
+ *   );
  */
 
 import * as THREE from 'three';
@@ -82,6 +90,8 @@ export interface LoadedCharacter {
   animations: Map<string, THREE.AnimationClip>;
   /** The skeleton (for debugging or retargeting) */
   skeleton: THREE.Skeleton | null;
+  /** Whether the model was loaded from FBX/GLB (false = procedural) */
+  fromFile?: boolean;
 }
 
 /** Progress callback */
@@ -1100,6 +1110,8 @@ export function generateAllProceduralAnimations(
     clips.set(stateName, generateProceduralAnimation(stateName, skeletonBones));
   }
 
+  console.log(`[MixamoLoader] Generated ${clips.size} procedural animations`);
+
   return clips;
 }
 
@@ -1120,6 +1132,7 @@ export class MixamoLoader {
   constructor() {
     this.gltfLoader = new GLTFLoader();
     this.fbxLoader = new FBXLoader();
+    console.log('[MixamoLoader] Initialized GLTFLoader + FBXLoader');
   }
 
   // ============================================================
@@ -1140,15 +1153,20 @@ export class MixamoLoader {
       scale?: number;
       castShadow?: boolean;
       receiveShadow?: boolean;
+      position?: THREE.Vector3;
     }
   ): Promise<THREE.Group> {
+    console.log(`[MixamoLoader] Loading model: ${url}`);
+
     // Check cache
     if (this.modelCache.has(url)) {
+      console.log(`[MixamoLoader] Model cache hit: ${url}`);
       return this.modelCache.get(url)!.clone();
     }
 
     // Deduplicate concurrent loads of the same URL
     if (this.loadingPromises.has(url)) {
+      console.log(`[MixamoLoader] Deduplicating model load: ${url}`);
       const cached = await this.loadingPromises.get(url);
       return cached.clone();
     }
@@ -1160,11 +1178,19 @@ export class MixamoLoader {
         this.fbxLoader.load(
           url,
           (fbx) => {
+            console.log(`[MixamoLoader] FBX model loaded: ${url}`);
             const model = this.processFBXModel(fbx, options);
             this.modelCache.set(url, model);
             resolve(model);
           },
-          undefined,
+          (progress) => {
+            if (progress.total > 0) {
+              const percent = Math.round((progress.loaded / progress.total) * 100);
+              if (percent % 25 === 0 || percent === 100) {
+                console.log(`[MixamoLoader] FBX model loading: ${percent}% (${url})`);
+              }
+            }
+          },
           (error) => {
             console.error(`[MixamoLoader] Failed to load FBX model: ${url}`, error);
             reject(error);
@@ -1174,11 +1200,19 @@ export class MixamoLoader {
         this.gltfLoader.load(
           url,
           (gltf) => {
+            console.log(`[MixamoLoader] GLB model loaded: ${url}`);
             const model = this.processModel(gltf, options);
             this.modelCache.set(url, model);
             resolve(model);
           },
-          undefined,
+          (progress) => {
+            if (progress.total > 0) {
+              const percent = Math.round((progress.loaded / progress.total) * 100);
+              if (percent % 25 === 0 || percent === 100) {
+                console.log(`[MixamoLoader] GLB model loading: ${percent}% (${url})`);
+              }
+            }
+          },
           (error) => {
             console.error(`[MixamoLoader] Failed to load GLB model: ${url}`, error);
             reject(error);
@@ -1190,7 +1224,51 @@ export class MixamoLoader {
     this.loadingPromises.set(url, promise);
     const result = await promise;
     this.loadingPromises.delete(url);
+
+    // Apply position if specified
+    if (options?.position) {
+      result.position.copy(options.position);
+      console.log(`[MixamoLoader] Set model position to: ${options.position.x.toFixed(2)}, ${options.position.y.toFixed(2)}, ${options.position.z.toFixed(2)}`);
+    }
+
     return result;
+  }
+
+  /**
+   * Load a model with automatic fallback: FBX → GLB → null.
+   * Returns null if all file-based loading fails.
+   *
+   * @param url - Full URL to the model file
+   * @param options - Loading options
+   * @returns The loaded model, or null if loading failed
+   */
+  async loadModelWithFallback(
+    url: string,
+    options?: {
+      scale?: number;
+      castShadow?: boolean;
+      receiveShadow?: boolean;
+      position?: THREE.Vector3;
+    }
+  ): Promise<THREE.Group | null> {
+    try {
+      return await this.loadModel(url, options);
+    } catch (err) {
+      const isFBX = url.toLowerCase().endsWith('.fbx');
+      if (isFBX) {
+        // Try GLB fallback — replace .fbx with .glb
+        const glbUrl = url.replace(/\.fbx$/i, '.glb');
+        console.log(`[MixamoLoader] FBX failed, trying GLB fallback: ${glbUrl}`);
+        try {
+          return await this.loadModel(glbUrl, options);
+        } catch (err2) {
+          console.warn(`[MixamoLoader] GLB fallback also failed: ${glbUrl}`, err2);
+          return null;
+        }
+      }
+      console.warn(`[MixamoLoader] Model load failed: ${url}`);
+      return null;
+    }
   }
 
   /**
@@ -1213,8 +1291,10 @@ export class MixamoLoader {
     model.scale.set(scale, scale, scale);
 
     // Enable shadows on all meshes
+    let meshCount = 0;
     model.traverse((child) => {
       if (child instanceof THREE.Mesh) {
+        meshCount++;
         child.castShadow = castShadow;
         child.receiveShadow = receiveShadow;
 
@@ -1243,6 +1323,7 @@ export class MixamoLoader {
       }
     });
 
+    console.log(`[MixamoLoader] Processed GLB model: ${meshCount} meshes, scale=${scale}`);
     return model;
   }
 
@@ -1265,14 +1346,19 @@ export class MixamoLoader {
     // Apply Mixamo scale (cm → m)
     fbx.scale.set(scale, scale, scale);
 
+    let meshCount = 0;
+    let boneFixedCount = 0;
+
     // Strip Mixamo prefix from skeleton bones and enable shadows
     fbx.traverse((child) => {
       // Fix skeleton bone names
       if (child instanceof THREE.Bone && child.name.startsWith('mixamorig:')) {
         child.name = child.name.replace('mixamorig:', '');
+        boneFixedCount++;
       }
 
       if (child instanceof THREE.Mesh) {
+        meshCount++;
         child.castShadow = castShadow;
         child.receiveShadow = receiveShadow;
 
@@ -1311,11 +1397,13 @@ export class MixamoLoader {
         for (const bone of child.skeleton.bones) {
           if (bone.name.startsWith('mixamorig:')) {
             bone.name = bone.name.replace('mixamorig:', '');
+            boneFixedCount++;
           }
         }
       }
     });
 
+    console.log(`[MixamoLoader] Processed FBX model: ${meshCount} meshes, ${boneFixedCount} bones fixed, scale=${scale}`);
     return fbx;
   }
 
@@ -1332,13 +1420,17 @@ export class MixamoLoader {
    * @param name - Name to assign to the clip
    */
   async loadAnimation(url: string, name: string): Promise<THREE.AnimationClip> {
+    console.log(`[MixamoLoader] Loading animation: ${url} → "${name}"`);
+
     // Check cache
     if (this.animationCache.has(name)) {
+      console.log(`[MixamoLoader] Animation cache hit: "${name}"`);
       return this.animationCache.get(name)!;
     }
 
     // Deduplicate
     if (this.loadingPromises.has(url)) {
+      console.log(`[MixamoLoader] Deduplicating animation load: ${url}`);
       return await this.loadingPromises.get(url);
     }
 
@@ -1360,10 +1452,19 @@ export class MixamoLoader {
             // Fix Mixamo bone names (FBX uses "mixamorig:" prefix)
             this.fixMixamoBoneNames(clip);
 
+            console.log(`[MixamoLoader] FBX animation loaded: "${name}" (${clip.tracks.length} tracks, ${clip.duration.toFixed(2)}s)`);
+
             this.animationCache.set(name, clip);
             resolve(clip);
           },
-          undefined,
+          (progress) => {
+            if (progress.total > 0) {
+              const percent = Math.round((progress.loaded / progress.total) * 100);
+              if (percent % 25 === 0 || percent === 100) {
+                console.log(`[MixamoLoader] FBX animation loading: ${percent}% (${name})`);
+              }
+            }
+          },
           (error) => {
             console.error(`[MixamoLoader] Failed to load FBX animation: ${url}`, error);
             reject(error);
@@ -1384,10 +1485,19 @@ export class MixamoLoader {
             // Fix Mixamo bone names if needed
             this.fixMixamoBoneNames(clip);
 
+            console.log(`[MixamoLoader] GLB animation loaded: "${name}" (${clip.tracks.length} tracks, ${clip.duration.toFixed(2)}s)`);
+
             this.animationCache.set(name, clip);
             resolve(clip);
           },
-          undefined,
+          (progress) => {
+            if (progress.total > 0) {
+              const percent = Math.round((progress.loaded / progress.total) * 100);
+              if (percent % 25 === 0 || percent === 100) {
+                console.log(`[MixamoLoader] GLB animation loading: ${percent}% (${name})`);
+              }
+            }
+          },
           (error) => {
             console.error(`[MixamoLoader] Failed to load GLB animation: ${url}`, error);
             reject(error);
@@ -1400,6 +1510,37 @@ export class MixamoLoader {
     const result = await promise;
     this.loadingPromises.delete(url);
     return result;
+  }
+
+  /**
+   * Load a single animation clip with fallback — returns null on failure
+   * instead of throwing.
+   *
+   * @param url - Full URL to the animation file
+   * @param name - Logical name for the clip
+   * @returns The loaded clip, or null if loading failed
+   */
+  async loadAnimationWithFallback(
+    url: string,
+    name: string
+  ): Promise<THREE.AnimationClip | null> {
+    try {
+      return await this.loadAnimation(url, name);
+    } catch (err) {
+      // If FBX failed, try GLB fallback
+      if (url.toLowerCase().endsWith('.fbx')) {
+        const glbUrl = url.replace(/\.fbx$/i, '.glb');
+        console.log(`[MixamoLoader] Animation fallback: trying GLB: ${glbUrl}`);
+        try {
+          return await this.loadAnimation(glbUrl, name);
+        } catch (err2) {
+          console.warn(`[MixamoLoader] Animation GLB fallback also failed: ${glbUrl}`);
+          return null;
+        }
+      }
+      console.warn(`[MixamoLoader] Animation fallback: "${name}" failed from ${url}`);
+      return null;
+    }
   }
 
   /**
@@ -1417,6 +1558,8 @@ export class MixamoLoader {
     const animations = new Map<string, THREE.AnimationClip>();
     const total = definitions.length;
     let loaded = 0;
+
+    console.log(`[MixamoLoader] Loading ${total} animations from: ${basePath}`);
 
     const promises = definitions.map(async (def) => {
       const url = `${basePath}/${def.file}`;
@@ -1440,6 +1583,50 @@ export class MixamoLoader {
     });
 
     await Promise.allSettled(promises);
+
+    console.log(`[MixamoLoader] Animation loading complete: ${animations.size}/${total} loaded`);
+
+    return animations;
+  }
+
+  /**
+   * Load multiple animations with fallback — failed animations are skipped
+   * but loading continues for the rest.
+   *
+   * @param basePath - Base directory for animation files
+   * @param definitions - Array of animation definitions
+   * @param onProgress - Optional progress callback
+   * @returns Map of animation name → clip (null values for failed loads)
+   */
+  async loadAnimationsWithFallback(
+    basePath: string,
+    definitions: AnimationDefinition[],
+    onProgress?: ProgressCallback
+  ): Promise<Map<string, THREE.AnimationClip | null>> {
+    const animations = new Map<string, THREE.AnimationClip | null>();
+    const total = definitions.length;
+    let loaded = 0;
+
+    console.log(`[MixamoLoader] Loading ${total} animations with fallback from: ${basePath}`);
+
+    const promises = definitions.map(async (def) => {
+      const url = `${basePath}/${def.file}`;
+      const clip = await this.loadAnimationWithFallback(url, def.name);
+
+      if (clip && def.timeScale !== undefined) {
+        (clip as any).__timeScale = def.timeScale;
+      }
+
+      animations.set(def.name, clip);
+      loaded++;
+      onProgress?.(loaded, total, def.name);
+    });
+
+    await Promise.allSettled(promises);
+
+    const loadedCount = [...animations.values()].filter(c => c !== null).length;
+    console.log(`[MixamoLoader] Animation loading complete: ${loadedCount}/${total} loaded, ${total - loadedCount} failed`);
+
     return animations;
   }
 
@@ -1517,6 +1704,8 @@ export class MixamoLoader {
     const modelUrl = `${basePath}/${modelFile ?? `${characterName}.glb`}`;
     const anims = animationDefs ?? CHARACTER_ANIMATIONS;
 
+    console.log(`[MixamoLoader] Loading character: ${characterName} from ${basePath}`);
+
     // Load model and animations in parallel
     let loaded = 0;
     const total = 1 + anims.length; // model + all animations
@@ -1546,7 +1735,218 @@ export class MixamoLoader {
       }
     });
 
-    return { model, animations, skeleton };
+    console.log(`[MixamoLoader] Character loaded: ${characterName} (model + ${animations.size} animations)`);
+
+    return { model, animations, skeleton, fromFile: true };
+  }
+
+  /**
+   * Load a complete FBX character with FBX model and animation files.
+   * Loads the model from the modelPath/modelFile (FBX), then loads
+   * animation FBX files from the animation directories.
+   *
+   * @param characterName - Name of the character (e.g., 'gas-mask', 'swat-guy')
+   * @param modelPath - Base path to model files (e.g., '/assets/models/gas-mask')
+   * @param animationDefs - Animation definitions (FBX filenames)
+   * @param animationBasePath - Base path to animation pack directories
+   * @param onProgress - Optional progress callback
+   */
+  async loadCharacterFBX(
+    characterName: string,
+    modelPath: string,
+    modelFile: string = 'model.fbx',
+    animationDefs?: AnimationDefinition[],
+    animationBasePath?: string,
+    onProgress?: ProgressCallback
+  ): Promise<LoadedCharacter> {
+    const modelUrl = `${modelPath}/${modelFile}`;
+    const anims = animationDefs ?? CHARACTER_ANIMATIONS;
+    const animBase = animationBasePath ?? modelPath;
+
+    console.log(`[MixamoLoader] Loading FBX character: ${characterName}`);
+    console.log(`[MixamoLoader] Model: ${modelUrl}`);
+    console.log(`[MixamoLoader] Animations from: ${animBase}`);
+
+    let loaded = 0;
+    const total = 1 + anims.length;
+
+    // Load FBX model
+    const modelPromise = this.loadModel(modelUrl).then((model) => {
+      loaded++;
+      onProgress?.(loaded, total, 'model');
+      return model;
+    });
+
+    // Load FBX animations
+    const animationsPromise = this.loadAnimations(
+      animBase,
+      anims,
+      (animLoaded, _total, name) => {
+        loaded++;
+        onProgress?.(loaded, total, name);
+      }
+    );
+
+    const [model, animations] = await Promise.all([modelPromise, animationsPromise]);
+
+    // Extract skeleton
+    let skeleton: THREE.Skeleton | null = null;
+    model.traverse((child) => {
+      if (child instanceof THREE.SkinnedMesh && child.skeleton) {
+        skeleton = child.skeleton;
+      }
+    });
+
+    console.log(`[MixamoLoader] FBX character loaded: ${characterName} (model from FBX + ${animations.size} animations)`);
+
+    return { model, animations, skeleton, fromFile: true };
+  }
+
+  /**
+   * Load a complete character with FBX model and animations, with full fallback chain.
+   * Tries FBX → GLB → procedural for model.
+   * Tries FBX → GLB → procedural for animations.
+   *
+   * @param characterName - Name of the character (e.g., 'gas-mask', 'swat-guy')
+   * @param modelPath - Base path to model files
+   * @param modelFile - Model filename (default: 'model.fbx')
+   * @param animationDefs - Animation definitions
+   * @param animationBasePath - Base path for animation files
+   * @param onProgress - Optional progress callback
+   */
+  async loadCharacterWithFBXFallback(
+    characterName: string,
+    modelPath: string,
+    modelFile: string = 'model.fbx',
+    animationDefs?: AnimationDefinition[],
+    animationBasePath?: string,
+    onProgress?: ProgressCallback
+  ): Promise<LoadedCharacter> {
+    const modelUrl = `${modelPath}/${modelFile}`;
+    const anims = animationDefs ?? CHARACTER_ANIMATIONS;
+    const animBase = animationBasePath ?? modelPath;
+
+    console.log(`[MixamoLoader] Loading FBX character with fallback: ${characterName}`);
+
+    let loaded = 0;
+    const total = 1 + anims.length;
+
+    // ── Load model with fallback: FBX → GLB → null ──
+    let model: THREE.Group;
+    let modelFromFBX = false;
+
+    try {
+      model = await this.loadModel(modelUrl);
+      modelFromFBX = true;
+      console.log(`[MixamoLoader] Model loaded from FBX: ${modelUrl}`);
+    } catch (fbxErr) {
+      console.warn(`[MixamoLoader] FBX model failed, trying GLB: ${modelUrl}`, fbxErr);
+      const glbUrl = modelUrl.replace(/\.fbx$/i, '.glb');
+      try {
+        model = await this.loadModel(glbUrl);
+        console.log(`[MixamoLoader] Model loaded from GLB: ${glbUrl}`);
+      } catch (glbErr) {
+        console.warn(`[MixamoLoader] GLB model also failed, using procedural model`);
+        model = new THREE.Group();
+        model.name = characterName;
+        // Create a simple fallback model
+        const fallbackMat = new THREE.MeshStandardMaterial({
+          color: characterName.includes('swat') ? 0x0d1b2a : 0x2a2a3e,
+          roughness: 0.8,
+        });
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.5, 0.4), fallbackMat);
+        body.position.y = 0.75;
+        body.castShadow = true;
+        model.add(body);
+        const head = new THREE.Mesh(
+          new THREE.BoxGeometry(0.25, 0.25, 0.25),
+          new THREE.MeshStandardMaterial({ color: 0xc9a882, roughness: 0.7 })
+        );
+        head.position.y = 1.65;
+        model.add(head);
+      }
+    }
+
+    loaded++;
+    onProgress?.(loaded, total, 'model');
+
+    // Apply position at origin (callers should position the model)
+    model.scale.set(MixamoLoader.SCALE_FACTOR, MixamoLoader.SCALE_FACTOR, MixamoLoader.SCALE_FACTOR);
+
+    // ── Load animations with fallback: FBX → GLB → procedural ──
+    let animations: Map<string, THREE.AnimationClip>;
+
+    try {
+      // Try loading from animation files
+      const fileAnimations = await this.loadAnimationsWithFallback(
+        animBase,
+        anims,
+        (animLoaded, _total, name) => {
+          loaded++;
+          onProgress?.(loaded, total, name);
+        }
+      );
+
+      // Extract skeleton for procedural fallback
+      let skeletonBones: string[] | undefined;
+      model.traverse((child) => {
+        if (child instanceof THREE.SkinnedMesh && child.skeleton) {
+          skeletonBones = child.skeleton.bones.map((b) => b.name);
+        }
+      });
+
+      // Generate procedural animations as baseline
+      const proceduralClips = generateAllProceduralAnimations(skeletonBones);
+
+      // Merge: real clips override procedural where available
+      animations = new Map<string, THREE.AnimationClip>();
+      for (const def of anims) {
+        const fileClip = fileAnimations.get(def.name);
+        if (fileClip) {
+          animations.set(def.name, fileClip);
+        } else if (proceduralClips.has(def.name)) {
+          console.log(`[MixamoLoader] Using procedural fallback for "${def.name}"`);
+          animations.set(def.name, proceduralClips.get(def.name)!);
+        }
+      }
+
+      // Include any extra procedural clips
+      for (const [name, clip] of proceduralClips) {
+        if (!animations.has(name)) {
+          animations.set(name, clip);
+        }
+      }
+    } catch (animErr) {
+      // If all animation loading fails, use procedural only
+      console.warn(`[MixamoLoader] Animation loading failed entirely, using procedural only:`, animErr);
+
+      let skeletonBones: string[] | undefined;
+      model.traverse((child) => {
+        if (child instanceof THREE.SkinnedMesh && child.skeleton) {
+          skeletonBones = child.skeleton.bones.map((b) => b.name);
+        }
+      });
+
+      animations = generateAllProceduralAnimations(skeletonBones);
+
+      // Count failed animations for progress
+      for (let i = loaded; i < total; i++) {
+        onProgress?.(i + 1, total, 'procedural');
+      }
+    }
+
+    // Extract skeleton
+    let skeleton: THREE.Skeleton | null = null;
+    model.traverse((child) => {
+      if (child instanceof THREE.SkinnedMesh && child.skeleton) {
+        skeleton = child.skeleton;
+      }
+    });
+
+    console.log(`[MixamoLoader] FBX character with fallback loaded: ${characterName}`);
+    console.log(`[MixamoLoader]   Model: ${modelFromFBX ? 'FBX' : 'procedural'}, Animations: ${animations.size}`);
+
+    return { model, animations, skeleton, fromFile: modelFromFBX };
   }
 
   /**
@@ -1569,11 +1969,35 @@ export class MixamoLoader {
     const modelUrl = `${basePath}/${modelFile ?? `${characterName}.glb`}`;
     const anims = animationDefs ?? CHARACTER_ANIMATIONS;
 
+    console.log(`[MixamoLoader] Loading character with procedural fallback: ${characterName}`);
+
     // Load model first (needed for skeleton bone names)
     let loaded = 0;
     const total = 1 + anims.length;
 
-    const model = await this.loadModel(modelUrl);
+    let model: THREE.Group;
+    try {
+      model = await this.loadModel(modelUrl);
+    } catch (modelErr) {
+      console.warn(`[MixamoLoader] Model load failed, using procedural model: ${modelUrl}`, modelErr);
+      model = new THREE.Group();
+      model.name = characterName;
+      const fallbackMat = new THREE.MeshStandardMaterial({
+        color: characterName.includes('wolf') ? 0x2a2a3e : 0x0d1b2a,
+        roughness: 0.8,
+      });
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.5, 0.4), fallbackMat);
+      body.position.y = 0.75;
+      body.castShadow = true;
+      model.add(body);
+      const head = new THREE.Mesh(
+        new THREE.BoxGeometry(0.25, 0.25, 0.25),
+        new THREE.MeshStandardMaterial({ color: 0xc9a882, roughness: 0.7 })
+      );
+      head.position.y = 1.65;
+      model.add(head);
+    }
+
     loaded++;
     onProgress?.(loaded, total, 'model');
 
@@ -1620,7 +2044,9 @@ export class MixamoLoader {
       }
     }
 
-    return { model, animations, skeleton };
+    console.log(`[MixamoLoader] Character with procedural fallback loaded: ${characterName} (${animations.size} animations)`);
+
+    return { model, animations, skeleton, fromFile: mixamoClips.size > 0 };
   }
 
   /**
@@ -1664,6 +2090,7 @@ export class MixamoLoader {
     this.modelCache.clear();
     this.animationCache.clear();
     this.loadingPromises.clear();
+    console.log('[MixamoLoader] Cache cleared');
   }
 
   /**
@@ -1704,6 +2131,7 @@ export class MixamoLoader {
       });
     }
     this.clearCache();
+    console.log('[MixamoLoader] Disposed all resources');
   }
 }
 
@@ -1741,6 +2169,8 @@ export function createCharacterMixer(
 
     actions.set(name, action);
   }
+
+  console.log(`[MixamoLoader] Created AnimationMixer with ${actions.size} actions`);
 
   return { mixer, actions };
 }
