@@ -1,0 +1,23 @@
+{
+  "name": "call-of-deity-protocol-313",
+  "version": "0.1.0",
+  "description": "Call of Deity: Protocol 313 — A Tactical FPS Web Game",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.160.0",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@types/three": "^0.160.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8"
+  },
+  "overrides": {
+    "allowScripts": true
+  }
+}

@@ -1,0 +1,1939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="description" content="Call of Deity: Protocol 313 — A tactical stealth FPS web game. Play the other side of the conflict." />
+  <title>CALL OF DEITY: Protocol 313</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+      color: #fff;
+    }
+
+    #game-canvas {
+      width: 100%;
+      height: 100%;
+      display: none;
+    }
+
+    /* Loading Screen */
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      transition: opacity 0.5s ease;
+    }
+
+    #loading-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+      visibility: hidden;
+    }
+
+    .loading-title {
+      font-size: 3rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.3em;
+      color: #FFD700;
+      text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+      margin-bottom: 0.5rem;
+    }
+
+    .loading-subtitle {
+      font-size: 1.2rem;
+      font-weight: 300;
+      letter-spacing: 0.5em;
+      color: #888;
+      margin-bottom: 3rem;
+    }
+
+    .loading-bar-container {
+      width: 300px;
+      height: 4px;
+      background: #333;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .loading-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #FFD700, #FF8C00);
+      transition: width 0.3s ease;
+    }
+
+    .loading-text {
+      margin-top: 1rem;
+      font-size: 0.8rem;
+      color: #666;
+      letter-spacing: 0.2em;
+    }
+
+    /* Main Menu */
+    #main-menu {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 900;
+    }
+
+    .menu-title {
+      font-size: 4rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.3em;
+      color: #FFD700;
+      text-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+      margin-bottom: 0.25rem;
+    }
+
+    .menu-protocol {
+      font-size: 1.5rem;
+      font-weight: 300;
+      letter-spacing: 1em;
+      color: #c0392b;
+      margin-bottom: 4rem;
+    }
+
+    .menu-button {
+      width: 300px;
+      padding: 1rem 2rem;
+      margin: 0.5rem 0;
+      background: transparent;
+      border: 2px solid #FFD700;
+      color: #FFD700;
+      font-size: 1.1rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3em;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .menu-button:hover {
+      background: #FFD700;
+      color: #000;
+      box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+    }
+
+    .menu-button.locked {
+      border-color: #444;
+      color: #444;
+      cursor: not-allowed;
+    }
+
+    .menu-button.locked:hover {
+      background: transparent;
+      color: #444;
+      box-shadow: none;
+    }
+
+    .menu-footer {
+      position: absolute;
+      bottom: 2rem;
+      font-size: 0.7rem;
+      color: #444;
+      text-align: center;
+      letter-spacing: 0.1em;
+    }
+
+    /* HUD */
+    #hud {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 100;
+      display: none;
+    }
+
+    /* Crosshair */
+    .crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 24px;
+      height: 24px;
+    }
+
+    .crosshair::before,
+    .crosshair::after {
+      content: '';
+      position: absolute;
+      background: rgba(255, 255, 255, 0.8);
+    }
+
+    .crosshair::before {
+      width: 2px;
+      height: 24px;
+      left: 11px;
+      top: 0;
+    }
+
+    .crosshair::after {
+      width: 24px;
+      height: 2px;
+      top: 11px;
+      left: 0;
+    }
+
+    /* Health Bars — bottom-left dual character display */
+    .hud-bottom-left {
+      position: absolute;
+      bottom: 2rem;
+      left: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .dual-health-container {
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-end;
+    }
+
+    .char-health-block {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+
+    .char-health-label {
+      font-size: 0.55rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #888;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    }
+
+    .char-health-bar {
+      width: 120px;
+      height: 10px;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid #555;
+      overflow: hidden;
+      transition: border-color 0.3s ease;
+    }
+
+    .char-health-bar.active {
+      border-color: #FFD700;
+      box-shadow: 0 0 6px rgba(255, 215, 0, 0.3);
+    }
+
+    .char-health-bar.inactive {
+      border-color: #555;
+    }
+
+    .char-health-bar.downed {
+      border-color: #e74c3c;
+      animation: downedPulse 1s ease-in-out infinite;
+    }
+
+    @keyframes downedPulse {
+      0%, 100% { border-color: #e74c3c; }
+      50% { border-color: #ff6666; }
+    }
+
+    .char-health-bar-fill {
+      height: 100%;
+      background: #e74c3c;
+      transition: width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), background-color 0.6s ease;
+    }
+
+    .char-health-bar-fill.wolf-fill {
+      background: linear-gradient(90deg, #c0392b, #e74c3c);
+    }
+
+    .char-health-bar-fill.falcon-fill {
+      background: linear-gradient(90deg, #2980b9, #3498db);
+    }
+
+    /* Per-character armor bar — directly below HP bar, no label */
+    .char-armor-bar {
+      width: 120px;
+      height: 4px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid #333;
+      overflow: hidden;
+    }
+
+    .char-armor-fill {
+      height: 100%;
+      transition: width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), background-color 0.6s ease;
+    }
+
+    .char-armor-fill.wolf-armor {
+      background: linear-gradient(90deg, #2471a3, #5dade2);
+    }
+
+    .char-armor-fill.falcon-armor {
+      background: linear-gradient(90deg, #1abc9c, #48c9b0);
+    }
+
+    .armor-bar {
+      width: 245px;
+      height: 6px;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid #333;
+    }
+
+    .armor-bar-fill {
+      height: 100%;
+      background: #3498db;
+      transition: width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), background-color 0.6s ease;
+    }
+
+    /* Weapon & Ammo — bottom-right */
+    .hud-bottom-right {
+      position: absolute;
+      bottom: 2rem;
+      right: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.5rem;
+    }
+
+    .weapon-slots-row {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .weapon-slot-item {
+      width: 160px;
+      height: 28px;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      gap: 6px;
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 11px;
+      font-family: 'Courier New', monospace;
+      font-weight: 600;
+      transition: all 0.15s ease-out;
+    }
+
+    .weapon-slot-item .slot-num {
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.4);
+      min-width: 14px;
+    }
+
+    .weapon-slot-item .slot-icon {
+      font-size: 12px;
+    }
+
+    .weapon-slot-item .slot-name {
+      font-size: 10px;
+      letter-spacing: 0.5px;
+    }
+
+    .weapon-slot-item.active-slot {
+      background: rgba(255, 215, 0, 0.15);
+      border-color: #FFD700;
+      color: #FFD700;
+    }
+
+    .weapon-slot-item.active-slot .slot-num {
+      color: #FFD700;
+    }
+
+    .ammo-display {
+      font-size: 2rem;
+      font-weight: 900;
+      color: #FFD700;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+      font-family: 'Courier New', monospace;
+      letter-spacing: 0.05em;
+    }
+
+    .ammo-label {
+      font-size: 0.6rem;
+      color: #666;
+      letter-spacing: 0.2em;
+      text-align: right;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    }
+
+    /* Detection Meter */
+    .detection-meter {
+      position: absolute;
+      top: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    .detection-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #333;
+      border: 1px solid #555;
+      transition: background 0.3s ease;
+    }
+
+    .detection-dot.active {
+      background: #e74c3c;
+      box-shadow: 0 0 10px rgba(231, 76, 60, 0.5);
+    }
+
+    /* Stealth Status Text — shows (STEALTHY), (CAUTIOUS), etc. */
+    .stealth-status-text {
+      margin-left: 0.5rem;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #00ff88;
+      text-shadow: 0 0 6px rgba(0, 255, 136, 0.5);
+      transition: color 0.3s ease, text-shadow 0.3s ease;
+      align-self: center;
+      white-space: nowrap;
+    }
+
+    /* Character Switch Indicator */
+    .character-indicator {
+      position: absolute;
+      bottom: 6rem;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+    }
+
+    .character-name {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #FFD700;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      text-shadow: 0 0 10px rgba(255, 215, 0, 0.4), 0 1px 4px rgba(0, 0, 0, 0.9);
+    }
+
+    .character-role {
+      font-size: 0.7rem;
+      color: #888;
+      letter-spacing: 0.2em;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    }
+
+    .stance-indicator {
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      margin-top: 2px;
+      padding: 1px 6px;
+      border-radius: 2px;
+      display: inline-block;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    }
+    .stance-indicator.standing { color: #4CAF50; border: 1px solid #4CAF50; }
+    .stance-indicator.crouching { color: #FF9800; border: 1px solid #FF9800; }
+    .stance-indicator.prone { color: #f44336; border: 1px solid #f44336; }
+
+    /* Mission Objective */
+    .mission-objective {
+      position: absolute;
+      top: 4rem;
+      left: 2rem;
+      max-width: 300px;
+    }
+
+    .objective-label {
+      font-size: 0.6rem;
+      color: #FFD700;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      margin-bottom: 0.25rem;
+      text-shadow: 0 0 8px rgba(255, 215, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.9);
+    }
+
+    .objective-text {
+      font-size: 0.9rem;
+      color: #fff;
+      line-height: 1.4;
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+    }
+
+    /* Score */
+    .score-display {
+      position: absolute;
+      top: 2rem;
+      right: 2rem;
+      text-align: right;
+    }
+
+    .score-label {
+      font-size: 0.6rem;
+      color: #888;
+      letter-spacing: 0.2em;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    }
+
+    .score-value {
+      font-size: 1.5rem;
+      font-weight: 900;
+      color: #FFD700;
+      text-shadow: 0 0 10px rgba(255, 215, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.8);
+      transition: transform 0.1s ease, text-shadow 0.3s ease;
+    }
+
+    .score-value.pop {
+      animation: scorePopAnim 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    @keyframes scorePopAnim {
+      0% { transform: scale(1); }
+      30% { transform: scale(1.25); text-shadow: 0 0 20px rgba(255, 215, 0, 0.9), 0 0 40px rgba(255, 215, 0, 0.4); }
+      60% { transform: scale(0.95); }
+      100% { transform: scale(1); text-shadow: 0 0 10px rgba(255, 215, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.8); }
+    }
+
+    /* Controls Help */
+    .controls-help {
+      position: absolute;
+      bottom: 6rem;
+      left: 2rem;
+      background: rgba(0, 0, 0, 0.55);
+      padding: 0.7rem 0.9rem;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 0.6rem;
+      line-height: 1.7;
+      pointer-events: none;
+      opacity: 0.7;
+      color: #ccc;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+    }
+    .controls-help kbd {
+      background: #333;
+      padding: 2px 6px;
+      border-radius: 3px;
+      border: 1px solid #555;
+      font-family: monospace;
+      color: #eee;
+    }
+
+    /* Mobile Controls */
+    .mobile-controls {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      pointer-events: none;
+      z-index: 200;
+    }
+
+    /* Kill Feed */
+    .kill-feed {
+      position: absolute;
+      top: 4rem;
+      right: 2rem;
+      width: 250px;
+    }
+
+    .kill-entry {
+      padding: 0.5rem 1rem;
+      background: rgba(0, 0, 0, 0.6);
+      margin-bottom: 0.25rem;
+      font-size: 0.75rem;
+      border-left: 3px solid #FFD700;
+      color: #fff;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+      animation: killEntryFadeIn 0.3s ease-out, killEntryFadeOut 0.5s ease-in 2.8s forwards;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+
+    .kill-entry.removing {
+      opacity: 0 !important;
+      transform: translateX(20px);
+      transition: opacity 0.4s ease-in, transform 0.4s ease-in;
+    }
+
+    @keyframes killEntryFadeIn {
+      0% { opacity: 0; transform: translateX(30px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+
+    @keyframes killEntryFadeOut {
+      0% { opacity: 1; transform: translateX(0) translateY(0); }
+      100% { opacity: 0; transform: translateX(10px) translateY(-5px); }
+    }
+
+    /* === DAMAGE DIRECTION INDICATORS === */
+    .damage-indicator {
+      position: absolute;
+      pointer-events: none;
+      z-index: 150;
+      opacity: 0;
+      transition: opacity 0.1s ease;
+    }
+    .damage-indicator.active {
+      opacity: 1;
+    }
+    .damage-arrow {
+      color: #ff0000;
+      font-size: 2rem;
+      text-shadow: 0 0 15px rgba(255, 0, 0, 0.8);
+      animation: damagePulse 0.4s ease-out;
+    }
+    #damage-top { top: 15%; left: 50%; transform: translateX(-50%); }
+    #damage-bottom { bottom: 25%; left: 50%; transform: translateX(-50%); }
+    #damage-left { left: 10%; top: 50%; transform: translateY(-50%); }
+    #damage-right { right: 10%; top: 50%; transform: translateY(-50%); }
+
+    @keyframes damagePulse {
+      0% { transform: scale(1.5); opacity: 1; }
+      100% { transform: scale(1); opacity: 0; }
+    }
+
+    /* === DAMAGE VIGNETTE (red flash on screen edge) === */
+    .damage-vignette {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 140;
+      opacity: 0;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(255, 0, 0, 0.6) 100%);
+      transition: opacity 0.15s ease;
+    }
+    .damage-vignette.active {
+      opacity: 1;
+    }
+
+    /* === LOW HEALTH VIGNETTE === */
+    .low-health-vignette {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 135;
+      opacity: 0;
+      background: radial-gradient(ellipse at center, transparent 40%, rgba(180, 0, 0, 0.4) 100%);
+    }
+    .low-health-vignette.active {
+      opacity: 1;
+      animation: lowHealthPulse 1.5s ease-in-out infinite;
+    }
+    @keyframes lowHealthPulse {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.7; }
+    }
+
+    /* === SCREEN SHAKE (CSS fallback) === */
+    .screen-shake {
+      animation: shakeAnim 0.15s ease-out;
+    }
+    @keyframes shakeAnim {
+      0% { transform: translate(0, 0); }
+      25% { transform: translate(-3px, 2px); }
+      50% { transform: translate(2px, -3px); }
+      75% { transform: translate(-1px, 1px); }
+      100% { transform: translate(0, 0); }
+    }
+
+    /* ============================================================
+       MOBILE — hide desktop-only HUD elements
+       ============================================================ */
+    @media (pointer: coarse), (hover: none) {
+      .controls-help { display: none !important; }
+      .hud-bottom-left { bottom: 140px !important; }
+      .hud-bottom-right { bottom: 140px !important; }
+      .character-indicator { bottom: 140px !important; }
+      .damage-indicator { display: none !important; }
+    }
+
+    /* ============================================================
+       COD-STYLE HIT MARKER (X-shaped, center screen)
+       ============================================================ */
+    #hit-marker {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 24px;
+      height: 24px;
+      pointer-events: none;
+      z-index: 250;
+      opacity: 0;
+      /* Not visible by default */
+    }
+
+    #hit-marker .hit-line {
+      position: absolute;
+      width: 20px;
+      height: 3px;
+      background: #ffffff;
+      top: 50%;
+      left: 50%;
+      border-radius: 1px;
+    }
+
+    /* Diagonal line 1: top-left to bottom-right */
+    #hit-marker .hit-line-1 {
+      transform: translate(-50%, -50%) rotate(45deg);
+    }
+
+    /* Diagonal line 2: top-right to bottom-left */
+    #hit-marker .hit-line-2 {
+      transform: translate(-50%, -50%) rotate(-45deg);
+    }
+
+    /* Headshot variant: red lines */
+    #hit-marker.headshot .hit-line {
+      background: #ff0000;
+      box-shadow: 0 0 6px rgba(255, 0, 0, 0.8);
+    }
+
+    /* Active state: visible with scale pop-in */
+    #hit-marker.active {
+      opacity: 1;
+      animation: hitMarkerPop 200ms ease-out forwards;
+    }
+
+    @keyframes hitMarkerPop {
+      0% {
+        transform: translate(-50%, -50%) scale(1.8);
+        opacity: 1;
+      }
+      40% {
+        transform: translate(-50%, -50%) scale(1.0);
+        opacity: 1;
+      }
+      100% {
+        transform: translate(-50%, -50%) scale(1.0);
+        opacity: 0;
+      }
+    }
+
+    /* ============================================================
+       NIGHT VISION OVERLAY — green-black vignette
+       ============================================================ */
+    #night-vision-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 155;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    #night-vision-overlay.active {
+      opacity: 1;
+    }
+    /* Black mask — oval visible 80% height, 1.35x wider */
+    #night-vision-overlay::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: radial-gradient(
+        ellipse 60% 80% at 50% 50%,
+        transparent 0%,
+        transparent 55%,
+        rgba(0, 0, 0, 0.5) 70%,
+        rgba(0, 0, 0, 0.9) 85%,
+        #000 100%
+      );
+    }
+    /* Green tint + scan lines — oval shape */
+    #night-vision-overlay::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: 
+        /* Green tint oval */
+        radial-gradient(
+          ellipse 60% 80% at 50% 50%,
+          rgba(0, 200, 0, 0.18) 0%,
+          rgba(0, 150, 0, 0.12) 40%,
+          transparent 55%
+        ),
+        /* Vertical scan lines */
+        repeating-linear-gradient(
+          90deg,
+          transparent 0px,
+          transparent 2px,
+          rgba(0, 0, 0, 0.08) 2px,
+          rgba(0, 0, 0, 0.08) 4px
+        );
+    }
+
+    /* NV Battery — positioned below detection meter */
+    #nv-battery {
+      position: absolute;
+      top: 3.2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+      z-index: 160;
+      display: none;
+      text-align: center;
+      width: 160px;
+    }
+    #nv-battery.active {
+      display: block;
+    }
+    .nv-label {
+      font-size: 0.6rem;
+      color: rgba(0, 255, 0, 0.7);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 3px;
+      font-weight: 600;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    }
+    .nv-bar-container {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 2px;
+    }
+    .nv-fill {
+      width: 100%;
+      height: 100%;
+      background: #4FC3F7;
+      border-radius: 2px;
+      transition: width 0.1s linear, background 0.3s;
+    }
+    .nv-text {
+      font-size: 0.65rem;
+      color: #4FC3F7;
+      letter-spacing: 0.1em;
+      font-weight: 600;
+    }
+
+    /* ============================================================
+       SNIPER SCOPE VIGNETTE
+       ============================================================ */
+    #scope-vignette {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 160;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      background: radial-gradient(
+        circle at center,
+        transparent 0%,
+        transparent 30%,
+        rgba(0, 0, 0, 0.3) 45%,
+        rgba(0, 0, 0, 0.85) 55%,
+        rgba(0, 0, 0, 0.95) 70%,
+        #000 80%
+      );
+    }
+    #scope-vignette.active {
+      opacity: 1;
+    }
+
+    /* Scope crosshair */
+    #scope-crosshair {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 165;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      width: 200px; height: 200px;
+    }
+    #scope-crosshair.active { opacity: 1; }
+    #scope-crosshair .scope-h,
+    #scope-crosshair .scope-v {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.7);
+    }
+    #scope-crosshair .scope-h {
+      width: 100%; height: 1px;
+      top: 50%; left: 0;
+    }
+    #scope-crosshair .scope-v {
+      width: 1px; height: 100%;
+      left: 50%; top: 0;
+    }
+    #scope-crosshair .scope-dot {
+      position: absolute;
+      width: 4px; height: 4px;
+      background: #ff0000;
+      border-radius: 50%;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    /* Scope zoom hint — positioned right below zoom level */
+    #scope-zoom-hint {
+      position: fixed;
+      bottom: 22%;
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+      z-index: 170;
+      opacity: 0;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+      transition: opacity 0.3s ease;
+    }
+    #scope-zoom-hint.active { opacity: 1; }
+
+    /* Scope zoom level display */
+    #scope-zoom-level {
+      position: fixed;
+      bottom: 24%;
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+      z-index: 170;
+      opacity: 0;
+      color: #FFD700;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-shadow: 0 1px 5px rgba(0, 0, 0, 0.9);
+      transition: opacity 0.3s ease;
+    }
+    #scope-zoom-level.active { opacity: 1; }
+
+    /* Hold breath hint + progress bar */
+    #breath-hint {
+      position: fixed;
+      bottom: 18%;
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+      z-index: 170;
+      opacity: 0;
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+      transition: opacity 0.3s ease;
+      text-align: center;
+      white-space: nowrap;
+    }
+    #breath-hint.active { opacity: 1; }
+
+    #breath-bar-container {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+      margin-top: 4px;
+      overflow: hidden;
+    }
+
+    #breath-bar {
+      width: 100%;
+      height: 100%;
+      background: #4FC3F7;
+      border-radius: 2px;
+      transition: width 0.1s linear;
+    }
+
+    #breath-bar.depleting {
+      background: #FF5252;
+    }
+
+    /* ============================================================
+       FLOATING XP POPUP
+       ============================================================ */
+    .xp-popup {
+      position: fixed;
+      pointer-events: none;
+      z-index: 260;
+      font-size: 1.1rem;
+      font-weight: 900;
+      color: #FFD700;
+      text-shadow:
+        0 0 8px rgba(255, 215, 0, 0.9),
+        0 0 20px rgba(255, 215, 0, 0.5),
+        0 2px 4px rgba(0, 0, 0, 0.8);
+      white-space: nowrap;
+      letter-spacing: 0.1em;
+      animation: xpFloatUp 1.5s ease-out forwards;
+    }
+
+    .xp-popup.headshot-popup {
+      font-size: 1.3rem;
+      color: #ff4444;
+      text-shadow:
+        0 0 10px rgba(255, 0, 0, 0.9),
+        0 0 25px rgba(255, 0, 0, 0.5),
+        0 2px 4px rgba(0, 0, 0, 0.8);
+    }
+
+    @keyframes xpFloatUp {
+      0% {
+        transform: translateY(0px) scale(0.8);
+        opacity: 1;
+      }
+      15% {
+        transform: translateY(-5px) scale(1.1);
+        opacity: 1;
+      }
+      30% {
+        transform: translateY(-15px) scale(1.0);
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(-60px) scale(0.9);
+        opacity: 0;
+      }
+    }
+
+    /* Pause Menu */
+    #pause-menu {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 500;
+    }
+
+    .pause-title {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #FFD700;
+      letter-spacing: 0.3em;
+      margin-bottom: 3rem;
+    }
+
+    /* Game Over Overlay */
+    #game-over {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 600;
+      pointer-events: all;
+    }
+
+    .gameover-title {
+      font-size: 4rem;
+      font-weight: 900;
+      color: #c0392b;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      text-shadow: 0 0 30px rgba(192, 57, 43, 0.6);
+      margin-bottom: 1rem;
+    }
+
+    .gameover-subtitle {
+      font-size: 1.2rem;
+      color: #888;
+      letter-spacing: 0.5em;
+      margin-bottom: 3rem;
+    }
+
+    .gameover-stats {
+      font-size: 0.9rem;
+      color: #aaa;
+      letter-spacing: 0.15em;
+      margin-bottom: 3rem;
+      text-align: center;
+      line-height: 1.8;
+    }
+
+    /* ============================================================
+       KILL CONFIRM ICON (skull/X at center screen)
+       ============================================================ */
+    #kill-confirm {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 300;
+      opacity: 0;
+      font-size: 3rem;
+      color: #ff0000;
+      text-shadow:
+        0 0 15px rgba(255, 0, 0, 0.9),
+        0 0 40px rgba(255, 0, 0, 0.5),
+        0 0 80px rgba(255, 0, 0, 0.3);
+      line-height: 1;
+    }
+    #kill-confirm.active {
+      animation: killConfirmFlash 300ms ease-out forwards;
+    }
+    @keyframes killConfirmFlash {
+      0% {
+        transform: translate(-50%, -50%) scale(2.0);
+        opacity: 1;
+      }
+      30% {
+        transform: translate(-50%, -50%) scale(1.0);
+        opacity: 1;
+      }
+      100% {
+        transform: translate(-50%, -50%) scale(0.9);
+        opacity: 0;
+      }
+    }
+
+    /* ============================================================
+       KILL STREAK NOTIFICATION
+       ============================================================ */
+    .kill-streak-notification {
+      position: fixed;
+      top: 18%;
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+      z-index: 310;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: #FFD700;
+      text-shadow:
+        0 0 10px rgba(255, 215, 0, 0.9),
+        0 0 30px rgba(255, 215, 0, 0.6),
+        0 0 60px rgba(255, 215, 0, 0.3),
+        0 2px 6px rgba(0, 0, 0, 0.9);
+      white-space: nowrap;
+      animation: killStreakPop 2s ease-out forwards;
+    }
+    /* Size tiers based on streak level */
+    .kill-streak-notification.tier-3 {
+      font-size: 1.8rem;
+    }
+    .kill-streak-notification.tier-5 {
+      font-size: 2.4rem;
+      color: #ff8c00;
+      text-shadow:
+        0 0 12px rgba(255, 140, 0, 0.9),
+        0 0 35px rgba(255, 140, 0, 0.6),
+        0 0 70px rgba(255, 140, 0, 0.3),
+        0 2px 6px rgba(0, 0, 0, 0.9);
+    }
+    .kill-streak-notification.tier-7 {
+      font-size: 3rem;
+      color: #ff3300;
+      text-shadow:
+        0 0 15px rgba(255, 51, 0, 0.9),
+        0 0 40px rgba(255, 51, 0, 0.6),
+        0 0 80px rgba(255, 51, 0, 0.3),
+        0 2px 8px rgba(0, 0, 0, 0.9);
+    }
+    .kill-streak-notification.tier-10 {
+      font-size: 3.5rem;
+      color: #ff00ff;
+      text-shadow:
+        0 0 20px rgba(255, 0, 255, 0.9),
+        0 0 50px rgba(255, 0, 255, 0.6),
+        0 0 100px rgba(255, 0, 255, 0.3),
+        0 2px 10px rgba(0, 0, 0, 0.9);
+      animation: killStreakPopGodlike 2s ease-out forwards;
+    }
+    @keyframes killStreakPop {
+      0% {
+        transform: translateX(-50%) scale(1.5);
+        opacity: 0;
+      }
+      15% {
+        transform: translateX(-50%) scale(1.15);
+        opacity: 1;
+      }
+      30% {
+        transform: translateX(-50%) scale(1.0);
+        opacity: 1;
+      }
+      70% {
+        transform: translateX(-50%) scale(1.0);
+        opacity: 1;
+      }
+      100% {
+        transform: translateX(-50%) scale(0.95);
+        opacity: 0;
+      }
+    }
+    @keyframes killStreakPopGodlike {
+      0% {
+        transform: translateX(-50%) scale(2.0);
+        opacity: 0;
+        filter: brightness(2);
+      }
+      15% {
+        transform: translateX(-50%) scale(1.3);
+        opacity: 1;
+        filter: brightness(1.5);
+      }
+      30% {
+        transform: translateX(-50%) scale(1.0);
+        opacity: 1;
+        filter: brightness(1.0);
+      }
+      70% {
+        transform: translateX(-50%) scale(1.0);
+        opacity: 1;
+        filter: brightness(1.0);
+      }
+      100% {
+        transform: translateX(-50%) scale(0.95);
+        opacity: 0;
+        filter: brightness(0.8);
+      }
+    }
+
+    /* ============================================================
+       FLOATING DAMAGE NUMBER
+       ============================================================ */
+    .damage-number {
+      position: fixed;
+      pointer-events: none;
+      z-index: 265;
+      font-size: 0.95rem;
+      font-weight: 900;
+      color: #ffffff;
+      text-shadow:
+        0 0 4px rgba(255, 255, 255, 0.8),
+        0 1px 3px rgba(0, 0, 0, 0.9);
+      white-space: nowrap;
+      letter-spacing: 0.05em;
+      animation: damageNumberFloat 1s ease-out forwards;
+    }
+    .damage-number.critical {
+      font-size: 1.3rem;
+      color: #ff4444;
+      text-shadow:
+        0 0 8px rgba(255, 0, 0, 0.9),
+        0 0 20px rgba(255, 0, 0, 0.4),
+        0 1px 3px rgba(0, 0, 0, 0.9);
+    }
+    .damage-number.kill {
+      font-size: 1.1rem;
+      color: #FFD700;
+      text-shadow:
+        0 0 8px rgba(255, 215, 0, 0.9),
+        0 0 20px rgba(255, 215, 0, 0.4),
+        0 1px 3px rgba(0, 0, 0, 0.9);
+    }
+    @keyframes damageNumberFloat {
+      0% {
+        transform: translate(-50%, 0) scale(0.6);
+        opacity: 1;
+      }
+      15% {
+        transform: translate(-50%, -5px) scale(1.15);
+        opacity: 1;
+      }
+      30% {
+        transform: translate(-50%, -12px) scale(1.0);
+        opacity: 1;
+      }
+      100% {
+        transform: translate(-50%, -55px) scale(0.85);
+        opacity: 0;
+      }
+    }
+
+    /* ============================================================
+       FILM GRAIN EFFECT (subtle red-tinted overlay for low HP)
+       ============================================================ */
+    #film-grain {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 145;
+      opacity: 0;
+      mix-blend-mode: overlay;
+      transition: opacity 0.5s ease;
+    }
+    #film-grain.active {
+      opacity: 0.15;
+      animation: grainShift 0.1s steps(2) infinite;
+    }
+    @keyframes grainShift {
+      0% { transform: translate(0, 0); }
+      25% { transform: translate(-2px, 1px); }
+      50% { transform: translate(1px, -2px); }
+      75% { transform: translate(-1px, -1px); }
+      100% { transform: translate(0, 0); }
+    }
+
+    /* ============================================================
+       TACTICAL COMMAND WHEEL OVERLAY
+       ============================================================ */
+    .command-wheel-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 400;
+      pointer-events: none;
+    }
+    .command-wheel-overlay.active {
+      display: flex;
+    }
+    .command-wheel-backdrop {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+    }
+    .command-wheel-container {
+      position: relative;
+      z-index: 401;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      padding: 2rem;
+      min-width: 380px;
+    }
+    .command-wheel-title {
+      text-align: center;
+      font-size: 1rem;
+      font-weight: 800;
+      color: #FFD700;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      text-shadow: 0 0 15px rgba(255, 215, 0, 0.6);
+      margin-bottom: 0.5rem;
+    }
+    .command-wheel-subtitle {
+      text-align: center;
+      font-size: 0.7rem;
+      color: #888;
+      letter-spacing: 0.15em;
+      margin-bottom: 0.5rem;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    }
+    .command-option {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.8rem 1.2rem;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(255, 215, 0, 0.25);
+      border-left: 3px solid transparent;
+      transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .command-option::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, rgba(255, 215, 0, 0.15), transparent);
+      transition: width 0.3s ease;
+      z-index: 0;
+    }
+
+    .command-option:hover,
+    .command-option.highlighted {
+      background: rgba(255, 215, 0, 0.08);
+      border-color: rgba(255, 215, 0, 0.6);
+      border-left-color: #FFD700;
+      transform: translateX(4px);
+      box-shadow: 0 0 15px rgba(255, 215, 0, 0.15), inset 0 0 20px rgba(255, 215, 0, 0.05);
+    }
+
+    .command-option:hover::before,
+    .command-option.highlighted::before {
+      width: 100%;
+    }
+
+    .command-option .cmd-key {
+      font-size: 1.2rem;
+      font-weight: 900;
+      color: #FFD700;
+      min-width: 28px;
+      text-align: center;
+      font-family: 'Courier New', monospace;
+      text-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
+      transition: transform 0.2s ease, text-shadow 0.2s ease;
+      position: relative;
+      z-index: 1;
+    }
+
+    .command-option:hover .cmd-key,
+    .command-option.highlighted .cmd-key {
+      transform: scale(1.15);
+      text-shadow: 0 0 15px rgba(255, 215, 0, 0.9), 0 0 30px rgba(255, 215, 0, 0.4);
+    }
+    .command-option .cmd-text {
+      font-size: 0.85rem;
+      color: #ddd;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+      position: relative;
+      z-index: 1;
+    }
+    .command-option .cmd-text span {
+      color: #FFD700;
+      font-weight: 800;
+      transition: color 0.2s ease;
+    }
+    .command-option:hover .cmd-text span,
+    .command-option.highlighted .cmd-text span {
+      color: #ffe44d;
+    }
+    .command-wheel-cancel {
+      text-align: center;
+      font-size: 0.65rem;
+      color: #666;
+      letter-spacing: 0.1em;
+      margin-top: 0.5rem;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+    }
+    .command-wheel-cancel kbd {
+      background: #333;
+      padding: 2px 8px;
+      border-radius: 3px;
+      border: 1px solid #555;
+      font-family: monospace;
+      color: #aaa;
+    }
+
+    /* ============================================================
+       LEAN INDICATOR — small arrow showing lean direction
+       ============================================================ */
+    .lean-indicator {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 180;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      font-size: 2.5rem;
+      color: rgba(255, 215, 0, 0.6);
+      text-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
+    }
+    .lean-indicator.active {
+      opacity: 1;
+    }
+    .lean-indicator.left {
+      left: calc(50% - 60px);
+    }
+    .lean-indicator.right {
+      left: calc(50% + 60px);
+    }
+
+    /* ============================================================
+       PER-CHARACTER ARMOR BARS (replaces single armor bar)
+       ============================================================ */
+    .dual-armor-container {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .armor-row {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    .armor-label {
+      font-size: 0.45rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      min-width: 36px;
+      text-align: right;
+      transition: color 0.3s ease;
+    }
+    .armor-label.wolf-label {
+      color: #4a7abf;
+    }
+    .armor-label.falcon-label {
+      color: #2abfba;
+    }
+    .armor-label.wolf-label.active {
+      color: #6aa0df;
+    }
+    .armor-label.falcon-label.active {
+      color: #40dfd8;
+    }
+    .armor-bar-dual {
+      width: 120px;
+      height: 5px;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid #333;
+      overflow: hidden;
+    }
+    .armor-bar-dual.active {
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+    .armor-bar-fill-dual {
+      height: 100%;
+      transition: width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), background-color 0.6s ease;
+    }
+    .armor-bar-fill-dual.wolf-armor {
+      background: linear-gradient(90deg, #1a5ab8, #4a8ad8);
+    }
+    .armor-bar-fill-dual.falcon-armor {
+      background: linear-gradient(90deg, #18a89e, #2cd4c8);
+    }
+    .armor-bar-fill-dual.wolf-armor.active-fill {
+      background: linear-gradient(90deg, #2878e0, #60a8ff);
+    }
+    .armor-bar-fill-dual.falcon-armor.active-fill {
+      background: linear-gradient(90deg, #20c8b8, #40f0e0);
+    }
+
+    /* ============================================================
+       GOLD KILL VIGNETTE (brief gold flash on kill)
+       ============================================================ */
+    .gold-vignette {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 142;
+      opacity: 0;
+      background: radial-gradient(ellipse at center, transparent 40%, rgba(255, 215, 0, 0.5) 100%);
+      transition: opacity 0.1s ease;
+    }
+    .gold-vignette.active {
+      opacity: 1;
+      animation: goldVignetteFlash 200ms ease-out forwards;
+    }
+    @keyframes goldVignetteFlash {
+      0% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    /* ============================================================
+       DOWNEC WARNING — Urgent teammate-down notification
+       ============================================================ */
+    .downed-warning {
+      position: fixed;
+      top: 22%;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      pointer-events: none;
+      z-index: 300;
+      display: none;
+    }
+
+    .downed-warning.visible {
+      display: block;
+      animation: downedWarningPulse 1s ease-in-out infinite;
+    }
+
+    .downed-warning-text {
+      font-size: 1.8rem;
+      font-weight: 900;
+      color: #e74c3c;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      text-shadow:
+        0 0 10px rgba(231, 76, 60, 0.9),
+        0 0 30px rgba(231, 76, 60, 0.5),
+        0 2px 4px rgba(0, 0, 0, 0.8);
+    }
+
+    .downed-warning-timer {
+      font-size: 2.5rem;
+      font-weight: 900;
+      color: #ff4444;
+      font-family: 'Courier New', monospace;
+      text-shadow:
+        0 0 15px rgba(255, 68, 68, 0.9),
+        0 0 40px rgba(255, 68, 68, 0.5);
+      margin-top: 0.3rem;
+    }
+
+    .downed-warning-hint {
+      font-size: 0.8rem;
+      color: #aaa;
+      letter-spacing: 0.1em;
+      margin-top: 0.5rem;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    }
+
+    @keyframes downedWarningPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    /* ============================================================
+       RESCUE PROGRESS BAR — shown when rescuing downed teammate
+       ============================================================ */
+    .rescue-progress {
+      position: fixed;
+      top: 55%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 200px;
+      text-align: center;
+      pointer-events: none;
+      z-index: 300;
+      display: none;
+    }
+
+    .rescue-progress.visible {
+      display: block;
+    }
+
+    .rescue-progress-text {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #44ff44;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 0.4rem;
+      text-shadow: 0 0 8px rgba(68, 255, 68, 0.6);
+    }
+
+    .rescue-progress-bar {
+      width: 100%;
+      height: 8px;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(68, 255, 68, 0.4);
+      overflow: hidden;
+    }
+
+    .rescue-progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #27ae60, #44ff44);
+      transition: width 0.1s linear;
+    }
+
+    /* ============================================================
+       DAMAGE VIGNETTE ENHANCED (supports custom colors)
+       ============================================================ */
+    #damage-vignette.red {
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(255, 0, 0, 0.6) 100%);
+    }
+    #damage-vignette.gold {
+      background: radial-gradient(ellipse at center, transparent 40%, rgba(255, 215, 0, 0.5) 100%);
+    }
+
+  </style>
+</head>
+<body>
+  <!-- Loading Screen -->
+  <div id="loading-screen">
+    <div class="loading-title">CALL OF DEITY</div>
+    <div class="loading-subtitle">PROTOCOL 313</div>
+    <div class="loading-bar-container">
+      <div class="loading-bar" id="loading-bar"></div>
+    </div>
+    <div class="loading-text">ESTABLISHING COMMS...</div>
+  </div>
+
+  <!-- Main Menu -->
+  <div id="main-menu">
+    <div class="menu-title">CALL OF DEITY</div>
+    <div class="menu-protocol">PROTOCOL 313</div>
+    <button class="menu-button" id="btn-campaign">CAMPAIGN</button>
+    <button class="menu-button" id="btn-multiplayer">MULTIPLAYER</button>
+    <button class="menu-button" id="btn-settings">SETTINGS</button>
+    <div class="menu-footer">
+      <p>This is a work of fiction. All names, characters, and events are entirely fictional.</p>
+      <p>Any resemblance to real persons, nations, or events is coincidental.</p>
+    </div>
+  </div>
+
+  <!-- Game Canvas -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- HUD -->
+  <div id="hud">
+    <!-- Crosshair -->
+    <div class="crosshair" id="crosshair"></div>
+
+    <!-- COD-Style Hit Marker (X-shaped, centered) -->
+    <div id="hit-marker">
+      <div class="hit-line hit-line-1"></div>
+      <div class="hit-line hit-line-2"></div>
+    </div>
+
+    <!-- Sniper Scope Vignette -->
+    <div id="scope-vignette"></div>
+    <div id="scope-crosshair">
+      <div class="scope-h"></div>
+      <div class="scope-v"></div>
+      <div class="scope-dot"></div>
+    </div>
+    <div id="scope-zoom-hint">Scroll up/down to zoom</div>
+    <div id="scope-zoom-level">5.0x</div>
+    <div id="breath-hint">
+      Hold <kbd style="background:#444;padding:1px 5px;border-radius:2px;border:1px solid #666">SHIFT</kbd> to hold breath
+      <div id="breath-bar-container"><div id="breath-bar"></div></div>
+    </div>
+
+    <!-- Night Vision Overlay -->
+    <div id="night-vision-overlay"></div>
+    <div id="nv-battery">
+      <div class="nv-label">NIGHT VISION BATTERY</div>
+      <div class="nv-bar-container"><div class="nv-fill"></div></div>
+      <div class="nv-text">100%</div>
+    </div>
+
+    <!-- Debug Panel -->
+    <div id="debug-panel" style="display:none; position:fixed; top:0.5rem; right:0.5rem; z-index:200; font-family:monospace; font-size:0.7rem; color:#0f0; background:rgba(0,0,0,0.85); padding:10px; border:1px solid #0f0; min-width:220px; pointer-events:auto;">
+      <div style="color:#ff0; font-weight:bold; margin-bottom:5px;">🔧 DEBUG MODE [F1]</div>
+      <div><label><input type="checkbox" id="dbg-chk-gui" checked> GUI Panel</label></div>
+      <div><label><input type="checkbox" id="dbg-chk-health" checked> HP 100x</label></div>
+      <div><label><input type="checkbox" id="dbg-chk-env"> Env Collision (green)</label></div>
+      <div><label><input type="checkbox" id="dbg-chk-enemy" checked> Enemy Stuck (red)</label></div>
+      <div><label><input type="checkbox" id="dbg-chk-hitbox" checked> Enemy Hitbox (yellow)</label></div>
+      <div><label><input type="checkbox" id="dbg-chk-labels" checked> Enemy Labels</label></div>
+      <hr style="border-color:#333; margin:4px 0;">
+      <div style="color:#aaa;">PLAYER: <span id="dbg-pos" style="color:#0f0;">0, 0, 0</span></div>
+      <div style="color:#aaa;">HP: <span id="dbg-hp" style="color:#0f0;">10000</span></div>
+      <div style="color:#aaa;">ENEMIES: <span id="dbg-enemies" style="color:#0f0;">0 alive</span></div>
+      <div style="color:#aaa;">STUCK: <span id="dbg-stuck" style="color:#0f0;">0</span></div>
+      <div style="color:#aaa;">TRACERS: <span id="dbg-tracers" style="color:#0f0;">0</span></div>
+      <div style="color:#aaa;">BULLETS: <span id="dbg-bullets" style="color:#0f0;">0</span></div>
+    </div>
+
+    <!-- Detection Meter -->
+    <div class="detection-meter" id="detection-meter">
+      <div class="detection-dot" id="det-1"></div>
+      <div class="detection-dot" id="det-2"></div>
+      <div class="detection-dot" id="det-3"></div>
+      <div class="detection-dot" id="det-4"></div>
+      <div class="detection-dot" id="det-5"></div>
+      <span class="stealth-status-text" id="stealth-status-text">(STEALTHY)</span>
+    </div>
+
+    <!-- Mission Objective -->
+    <div class="mission-objective">
+      <div class="objective-label">MISSION OBJECTIVE</div>
+      <div class="objective-text" id="objective-text">Sabotage the Border Radar</div>
+    </div>
+
+    <!-- Score -->
+    <div class="score-display">
+      <div class="score-label">SCORE</div>
+      <div class="score-value" id="score-value">0</div>
+    </div>
+
+    <!-- Character Indicator -->
+    <div class="character-indicator">
+      <div class="character-name" id="character-name">WOLF</div>
+      <div class="character-role" id="character-role">THE OPERATOR</div>
+      <div class="stance-indicator" id="stance-indicator">STANDING</div>
+    </div>
+
+    <!-- Health & Armor — bottom-left -->
+    <div class="hud-bottom-left">
+      <div class="dual-health-container">
+        <!-- Wolf -->
+        <div class="char-health-block">
+          <div class="char-health-label">WOLF</div>
+          <div class="char-health-bar active" id="wolf-health-bar">
+            <div class="char-health-bar-fill wolf-fill" id="wolf-health-fill" style="width: 100%"></div>
+          </div>
+          <div class="char-armor-bar" id="wolf-armor-bar">
+            <div class="char-armor-fill wolf-armor" id="wolf-armor-fill" style="width: 100%"></div>
+          </div>
+        </div>
+        <!-- Falcon -->
+        <div class="char-health-block">
+          <div class="char-health-label">FALCON</div>
+          <div class="char-health-bar inactive" id="falcon-health-bar">
+            <div class="char-health-bar-fill falcon-fill" id="falcon-health-fill" style="width: 100%"></div>
+          </div>
+          <div class="char-armor-bar" id="falcon-armor-bar">
+            <div class="char-armor-fill falcon-armor" id="falcon-armor-fill" style="width: 100%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Weapon Slots & Ammo — bottom-right -->
+    <div class="hud-bottom-right">
+      <div class="weapon-slots-row" id="weapon-slots-row">
+        <div class="weapon-slot-item" id="wslot-1"><span class="slot-num">1</span><span class="slot-icon">👊</span><span class="slot-name">Bare Hands</span></div>
+        <div class="weapon-slot-item" id="wslot-2"><span class="slot-num">2</span><span class="slot-icon">🔪</span><span class="slot-name">Combat Knife</span></div>
+        <div class="weapon-slot-item" id="wslot-3"><span class="slot-num">3</span><span class="slot-icon">🔫</span><span class="slot-name">Makara-9</span></div>
+        <div class="weapon-slot-item active-slot" id="wslot-4"><span class="slot-num">4</span><span class="slot-icon">🔫</span><span class="slot-name">Zulfiqar-47</span></div>
+      </div>
+      <div id="weapon-name-hud" style="font-size:0.7rem; color:#FFD700; letter-spacing:0.15em; font-weight:700; text-transform:uppercase; text-shadow:0 1px 3px rgba(0,0,0,0.8);">Zulfiqar-47</div>
+      <div class="ammo-display" id="ammo-count">30/30 | 90</div>
+      <div class="ammo-label">AMMO</div>
+    </div>
+
+    <!-- Downed Warning -->
+    <div class="downed-warning" id="downed-warning">
+      <div class="downed-warning-text">⚠ TEAMMATE DOWN!</div>
+      <div class="downed-warning-timer" id="downed-timer">60</div>
+      <div class="downed-warning-hint">Reach them and hold [E] to rescue</div>
+    </div>
+
+    <!-- Rescue Progress Bar -->
+    <div class="rescue-progress" id="rescue-progress">
+      <div class="rescue-progress-text">REVIVING...</div>
+      <div class="rescue-progress-bar">
+        <div class="rescue-progress-fill" id="rescue-progress-fill"></div>
+      </div>
+    </div>
+
+    <!-- Kill Feed -->
+    <div class="kill-feed" id="kill-feed"></div>
+
+    <!-- Damage Direction Indicators -->
+    <div class="damage-indicator" id="damage-top">
+      <div class="damage-arrow">▼</div>
+    </div>
+    <div class="damage-indicator" id="damage-bottom">
+      <div class="damage-arrow">▲</div>
+    </div>
+    <div class="damage-indicator" id="damage-left">
+      <div class="damage-arrow">▶</div>
+    </div>
+    <div class="damage-indicator" id="damage-right">
+      <div class="damage-arrow">◀</div>
+    </div>
+
+    <!-- Damage Vignette (screen edge flash when hit) -->
+    <div class="damage-vignette" id="damage-vignette"></div>
+
+    <!-- Low Health Vignette (constant red pulse when low HP) -->
+    <div class="low-health-vignette" id="low-health-vignette"></div>
+
+    <!-- Kill Confirm Icon (skull flash at center) -->
+    <div id="kill-confirm">💀</div>
+
+    <!-- Gold Kill Vignette (brief gold screen-edge flash on kill) -->
+    <div class="gold-vignette" id="gold-vignette"></div>
+
+    <!-- Film Grain Overlay (red-tinted at critical HP) -->
+    <canvas id="film-grain"></canvas>
+
+    <!-- Tactical Command Wheel Overlay -->
+    <div class="command-wheel-overlay" id="command-wheel-overlay">
+      <div class="command-wheel-backdrop"></div>
+      <div class="command-wheel-container">
+        <div class="command-wheel-title">TACTICAL COMMAND</div>
+        <div class="command-wheel-subtitle">Ask <span class="cmd-char-name">FALCON</span> to...</div>
+        <div class="command-option" id="cmd-opt-1">
+          <div class="cmd-key">1</div>
+          <div class="cmd-text"><span>TAKE OVER</span> — Switch to <span class="cmd-takeover-name">FALCON</span></div>
+        </div>
+        <div class="command-option" id="cmd-opt-2">
+          <div class="cmd-key">2</div>
+          <div class="cmd-text"><span>TAKE COVER</span> — Go to nearest cover</div>
+        </div>
+        <div class="command-option" id="cmd-opt-3">
+          <div class="cmd-key">3</div>
+          <div class="cmd-text"><span>FOLLOW ME</span> — Follow active character</div>
+        </div>
+        <div class="command-option" id="cmd-opt-4">
+          <div class="cmd-key">4</div>
+          <div class="cmd-text"><span>HOLD POSITION</span> — Stay put</div>
+        </div>
+        <div class="command-wheel-cancel">Press <kbd>`</kbd> to cancel</div>
+      </div>
+    </div>
+
+    <!-- Lean Indicator -->
+    <div class="lean-indicator" id="lean-indicator">◄</div>
+
+    <!-- Kill Streak Notifications (dynamically spawned) -->
+
+    <!-- Controls Help -->
+    <div class="controls-help" id="controls-help">
+      <strong>CONTROLS</strong><br>
+      <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move<br>
+      <kbd>Mouse</kbd> Look<br>
+      <kbd>Left Click</kbd> Fire<br>
+      <kbd>Right Click</kbd> ADS<br>
+      <kbd>Q</kbd> Lean Left | <kbd>E</kbd> Lean Right<br>
+      <kbd>`</kbd> Tactical Command<br>
+      <kbd>Space</kbd> Jump<br>
+      <kbd>C</kbd> Crouch | <kbd>X</kbd> Prone<br>
+      <kbd>Shift</kbd> Sprint | <kbd>F</kbd> Melee<br>
+      <kbd>R</kbd> Reload | <kbd>V</kbd> Night Vision | <kbd>ESC</kbd> Pause
+    </div>
+  </div>
+
+  <!-- Pause Menu -->
+  <div id="pause-menu">
+    <div class="pause-title">PAUSED</div>
+    <button class="menu-button" id="btn-resume">RESUME</button>
+    <button class="menu-button" id="btn-restart">RESTART MISSION</button>
+    <button class="menu-button" id="btn-quit">QUIT TO MENU</button>
+  </div>
+
+  <!-- Game Over Overlay -->
+  <div id="game-over">
+    <div class="gameover-title">MISSION FAILED</div>
+    <div class="gameover-subtitle">OPERATIVE DOWN</div>
+    <div class="gameover-stats">
+      <div>YOUR SCORE: <span id="final-score">0</span></div>
+    </div>
+    <button class="menu-button" id="btn-respawn">RESPAWN</button>
+  </div>
+
+  <!-- Mobile Controls -->
+  <div class="mobile-controls" id="mobile-controls">
+    <div class="joystick-area">
+      <div class="joystick-knob"></div>
+    </div>
+    <div class="action-buttons">
+      <div class="action-btn">SWITCH</div>
+      <div class="action-btn">JAMMER</div>
+      <div class="action-btn">MELEE</div>
+      <div class="action-btn shoot">FIRE</div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

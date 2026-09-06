@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CALL OF DEITY: Protocol 313 — Demo</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; color: #fff; }
+    
+    #loading-screen {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      z-index: 1000;
+    }
+    .loading-title { font-size: 3rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.3em; color: #FFD700; text-shadow: 0 0 20px rgba(255,215,0,0.5); }
+    .loading-subtitle { font-size: 1.2rem; font-weight: 300; letter-spacing: 0.5em; color: #c0392b; margin: 0.5rem 0 3rem; }
+    .loading-bar-container { width: 300px; height: 4px; background: #333; border-radius: 2px; overflow: hidden; }
+    .loading-bar { width: 0%; height: 100%; background: linear-gradient(90deg, #FFD700, #FF8C00); transition: width 0.3s; }
+    .loading-text { margin-top: 1rem; font-size: 0.8rem; color: #666; letter-spacing: 0.2em; }
+    
+    #main-menu {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+      display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 900;
+    }
+    .menu-title { font-size: 4rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.3em; color: #FFD700; text-shadow: 0 0 30px rgba(255,215,0,0.5); }
+    .menu-protocol { font-size: 1.5rem; font-weight: 300; letter-spacing: 1em; color: #c0392b; margin-bottom: 4rem; }
+    .menu-button {
+      width: 300px; padding: 1rem 2rem; margin: 0.5rem 0; background: transparent;
+      border: 2px solid #FFD700; color: #FFD700; font-size: 1.1rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.3em; cursor: pointer; transition: all 0.3s;
+    }
+    .menu-button:hover { background: #FFD700; color: #000; box-shadow: 0 0 30px rgba(255,215,0,0.3); }
+    .menu-footer { position: absolute; bottom: 2rem; font-size: 0.7rem; color: #444; text-align: center; }
+    
+    #game-container { position: relative; width: 100%; height: 100%; display: none; }
+    #game-canvas { width: 100%; height: 100%; display: block; }
+    
+    #hud {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 100; display: none;
+    }
+    .crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 24px; height: 24px; }
+    .crosshair::before, .crosshair::after { content: ''; position: absolute; background: rgba(255,255,255,0.8); }
+    .crosshair::before { width: 2px; height: 24px; left: 11px; }
+    .crosshair::after { width: 24px; height: 2px; top: 11px; }
+    
+    .detection-meter { position: absolute; top: 2rem; left: 50%; transform: translateX(-50%); display: flex; gap: 0.25rem; }
+    .detection-dot { width: 12px; height: 12px; border-radius: 50%; background: #333; border: 1px solid #555; transition: all 0.3s; }
+    .detection-dot.active { background: #e74c3c; box-shadow: 0 0 10px rgba(231,76,60,0.5); }
+    
+    .hud-bottom-left { position: absolute; bottom: 2rem; left: 2rem; }
+    .health-bar { width: 200px; height: 8px; background: rgba(0,0,0,0.6); border: 1px solid #333; margin-bottom: 0.5rem; }
+    .health-fill { height: 100%; background: #e74c3c; width: 100%; transition: width 0.3s; }
+    .armor-bar { width: 200px; height: 6px; background: rgba(0,0,0,0.6); border: 1px solid #333; }
+    .armor-fill { height: 100%; background: #3498db; width: 50%; transition: width 0.3s; }
+    
+    .hud-bottom-right { position: absolute; bottom: 2rem; right: 2rem; text-align: right; }
+    .ammo-count { font-size: 2rem; font-weight: 900; color: #FFD700; }
+    .ammo-label { font-size: 0.7rem; color: #888; letter-spacing: 0.2em; }
+    
+    .character-indicator { position: absolute; bottom: 6rem; left: 50%; transform: translateX(-50%); text-align: center; }
+    .character-name { font-size: 1rem; font-weight: 700; color: #FFD700; letter-spacing: 0.3em; text-transform: uppercase; }
+    .character-role { font-size: 0.7rem; color: #888; letter-spacing: 0.2em; }
+    
+    .mission-objective { position: absolute; top: 4rem; left: 2rem; max-width: 300px; }
+    .objective-label { font-size: 0.6rem; color: #FFD700; letter-spacing: 0.3em; text-transform: uppercase; margin-bottom: 0.25rem; }
+    .objective-text { font-size: 0.9rem; color: #fff; }
+    
+    .score-display { position: absolute; top: 2rem; right: 2rem; text-align: right; }
+    .score-label { font-size: 0.6rem; color: #888; letter-spacing: 0.2em; }
+    .score-value { font-size: 1.5rem; font-weight: 900; color: #FFD700; }
+    
+    .controls-help {
+      position: absolute; bottom: 6rem; right: 2rem; background: rgba(0,0,0,0.7);
+      padding: 1rem; border: 1px solid #333; font-size: 0.7rem; line-height: 1.8;
+    }
+    .controls-help kbd { background: #333; padding: 2px 6px; border-radius: 3px; border: 1px solid #555; }
+  </style>
+</head>
+<body>
+  <!-- Loading Screen -->
+  <div id="loading-screen">
+    <div class="loading-title">CALL OF DEITY</div>
+    <div class="loading-subtitle">PROTOCOL 313</div>
+    <div class="loading-bar-container">
+      <div class="loading-bar" id="loading-bar"></div>
+    </div>
+    <div class="loading-text">INITIALIZING TACTICAL SYSTEMS...</div>
+  </div>
+
+  <!-- Main Menu -->
+  <div id="main-menu">
+    <div class="menu-title">CALL OF DEITY</div>
+    <div class="menu-protocol">PROTOCOL 313</div>
+    <button class="menu-button" id="btn-campaign">CAMPAIGN</button>
+    <button class="menu-button" id="btn-multiplayer">MULTIPLAYER</button>
+    <button class="menu-button" id="btn-settings">SETTINGS</button>
+    <div class="menu-footer">
+      <p>This is a work of fiction. All names, characters, and events are entirely fictional.</p>
+      <p>Any resemblance to real persons, nations, or events is coincidental.</p>
+    </div>
+  </div>
+
+  <!-- Game Container -->
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div class="crosshair"></div>
+    
+    <div class="detection-meter" id="detection-meter">
+      <div class="detection-dot" id="det-1"></div>
+      <div class="detection-dot" id="det-2"></div>
+      <div class="detection-dot" id="det-3"></div>
+      <div class="detection-dot" id="det-4"></div>
+      <div class="detection-dot" id="det-5"></div>
+    </div>
+    
+    <div class="mission-objective">
+      <div class="objective-label">MISSION OBJECTIVE</div>
+      <div class="objective-text" id="objective-text">Operation: Desert Dawn — Sabotage the Border Radar</div>
+    </div>
+    
+    <div class="score-display">
+      <div class="score-label">SCORE</div>
+      <div class="score-value" id="score-value">0</div>
+    </div>
+    
+    <div class="character-indicator">
+      <div class="character-name" id="character-name">WOLF</div>
+      <div class="character-role" id="character-role">THE OPERATOR</div>
+    </div>
+    
+    <div class="hud-bottom-left">
+      <div class="health-bar"><div class="health-fill" id="health-fill"></div></div>
+      <div class="armor-bar"><div class="armor-fill" id="armor-fill"></div></div>
+    </div>
+    
+    <div class="hud-bottom-right">
+      <div class="ammo-count" id="ammo-count">30/30</div>
+      <div class="ammo-label">AMMO</div>
+    </div>
+    
+    <div class="controls-help">
+      <strong>CONTROLS</strong><br>
+      <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move<br>
+      <kbd>Mouse</kbd> Look<br>
+      <kbd>Left Click</kbd> Fire<br>
+      <kbd>Right Click</kbd> ADS<br>
+      <kbd>Q</kbd> Switch Character<br>
+      <kbd>C</kbd> Crouch | <kbd>X</kbd> Prone<br>
+      <kbd>Shift</kbd> Sprint | <kbd>F</kbd> Melee<br>
+      <kbd>R</kbd> Reload | <kbd>ESC</kbd> Pause
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+
+    // ============================================================
+    // GAME STATE
+    // ============================================================
+    let gameState = 'loading';
+    let activeCharacter = 'wolf';
+    let score = 0;
+    let health = 100;
+    let armor = 50;
+    let ammo = 30;
+    let maxAmmo = 30;
+    let detectionLevel = 0;
+    let detectionProgress = 0;
+    
+    // Player state
+    let isMoving = false;
+    let isSprinting = false;
+    let isCrouching = false;
+    let isProne = false;
+    let isADS = false;
+    let playerSpeed = 5;
+    
+    // Input
+    const keys = {};
+    let mouseX = 0, mouseY = 0;
+    let rotY = 0, rotX = 0;
+    
+    // ============================================================
+    // DOM ELEMENTS
+    // ============================================================
+    const loadingScreen = document.getElementById('loading-screen');
+    const loadingBar = document.getElementById('loading-bar');
+    const loadingText = document.querySelector('.loading-text');
+    const mainMenu = document.getElementById('main-menu');
+    const gameContainer = document.getElementById('game-container');
+    const hud = document.getElementById('hud');
+    const canvas = document.getElementById('game-canvas');
+    const btnCampaign = document.getElementById('btn-campaign');
+    const characterName = document.getElementById('character-name');
+    const characterRole = document.getElementById('character-role');
+    const healthFill = document.getElementById('health-fill');
+    const armorFill = document.getElementById('armor-fill');
+    const ammoCount = document.getElementById('ammo-count');
+    const scoreValue = document.getElementById('score-value');
+    const objectiveText = document.getElementById('objective-text');
+    
+    // ============================================================
+    // THREE.JS SETUP
+    // ============================================================
+    let renderer, scene, camera, clock;
+    let playerGroup, enemies = [], bullets = [];
+    let spotlightCones = [];
+    
+    function initThreeJS() {
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.2;
+      
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0a14);
+      scene.fog = new THREE.FogExp2(0x0a0a14, 0.008);
+      
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500);
+      camera.position.set(0, 1.7, 20);
+      
+      clock = new THREE.Clock();
+      
+      // Lighting
+      const ambientLight = new THREE.AmbientLight(0x404060, 0.3);
+      scene.add(ambientLight);
+      
+      const moonLight = new THREE.DirectionalLight(0x6688cc, 0.6);
+      moonLight.position.set(30, 50, 20);
+      moonLight.castShadow = true;
+      moonLight.shadow.mapSize.set(2048, 2048);
+      moonLight.shadow.camera.near = 0.5;
+      moonLight.shadow.camera.far = 200;
+      moonLight.shadow.camera.left = -60;
+      moonLight.shadow.camera.right = 60;
+      moonLight.shadow.camera.top = 60;
+      moonLight.shadow.camera.bottom = -60;
+      scene.add(moonLight);
+      
+      const hemiLight = new THREE.HemisphereLight(0x2244aa, 0x443322, 0.4);
+      scene.add(hemiLight);
+      
+      buildEnvironment();
+      spawnEnemies();
+      createPlayerModel();
+    }
+    
+    function buildEnvironment() {
+      // Ground — desert sand
+      const groundGeo = new THREE.PlaneGeometry(300, 300);
+      const groundMat = new THREE.MeshStandardMaterial({ color: 0xC2B280, roughness: 0.95, metalness: 0.05 });
+      const ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      scene.add(ground);
+      
+      // Wall material
+      const wallMat = new THREE.MeshStandardMaterial({ color: 0x6B5B4F, roughness: 0.8, metalness: 0.1 });
+      const metalMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.5, metalness: 0.4 });
+      const concreteMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.9, metalness: 0.05 });
+      
+      // Border wall
+      const borderWall = new THREE.Mesh(new THREE.BoxGeometry(60, 7, 1.5), concreteMat);
+      borderWall.position.set(0, 3.5, -40);
+      borderWall.castShadow = true;
+      borderWall.receiveShadow = true;
+      scene.add(borderWall);
+      
+      // Gate
+      const gateMat = new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.6, roughness: 0.4 });
+      const gateLeft = new THREE.Mesh(new THREE.BoxGeometry(1, 6, 0.5), gateMat);
+      gateLeft.position.set(-3, 3, -40);
+      gateLeft.castShadow = true;
+      scene.add(gateLeft);
+      const gateRight = new THREE.Mesh(new THREE.BoxGeometry(1, 6, 0.5), gateMat);
+      gateRight.position.set(3, 3, -40);
+      gateRight.castShadow = true;
+      scene.add(gateRight);
+      const gateTop = new THREE.Mesh(new THREE.BoxGeometry(8, 0.5, 0.5), gateMat);
+      gateTop.position.set(0, 6, -40);
+      gateTop.castShadow = true;
+      scene.add(gateTop);
+      
+      // Guard towers
+      addGuardTower(-18, -40);
+      addGuardTower(18, -40);
+      addGuardTower(-30, -25);
+      addGuardTower(30, -25);
+      
+      // Scattered cover objects
+      const coverPositions = [
+        { x: -8, z: -15, sx: 3, sy: 1.5, sz: 0.5 },
+        { x: 8, z: -12, sx: 2, sy: 2, sz: 0.5 },
+        { x: -15, z: -25, sx: 4, sy: 1, sz: 1 },
+        { x: 12, z: -22, sx: 1.5, sy: 2.5, sz: 0.5 },
+        { x: 0, z: -20, sx: 2, sy: 1, sz: 2 },
+        { x: -5, z: -30, sx: 1, sy: 3, sz: 1 },
+        { x: 5, z: -28, sx: 1.5, sy: 1.5, sz: 1.5 },
+      ];
+      
+      coverPositions.forEach(p => {
+        const cover = new THREE.Mesh(
+          new THREE.BoxGeometry(p.sx, p.sy, p.sz),
+          wallMat
+        );
+        cover.position.set(p.x, p.sy / 2, p.z);
+        cover.castShadow = true;
+        cover.receiveShadow = true;
+        scene.add(cover);
+      });
+      
+      // Background mountains (low-poly)
+      for (let i = 0; i < 15; i++) {
+        const height = 10 + Math.random() * 30;
+        const width = 15 + Math.random() * 25;
+        const mountain = new THREE.Mesh(
+          new THREE.ConeGeometry(width / 2, height, 5 + Math.floor(Math.random() * 3)),
+          new THREE.MeshStandardMaterial({ color: 0x3a3a4a, roughness: 1 })
+        );
+        mountain.position.set(
+          (Math.random() - 0.5) * 200,
+          height / 2,
+          -80 - Math.random() * 60
+        );
+        mountain.castShadow = false;
+        mountain.receiveShadow = false;
+        scene.add(mountain);
+      }
+    }
+    
+    function addGuardTower(x, z) {
+      const towerMat = new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.3, roughness: 0.7 });
+      
+      // Tower pole
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 10, 8), towerMat);
+      pole.position.set(x, 5, z);
+      pole.castShadow = true;
+      scene.add(pole);
+      
+      // Platform
+      const platform = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.3, 2.5), towerMat);
+      platform.position.set(x, 9.5, z);
+      platform.castShadow = true;
+      scene.add(platform);
+      
+      // Spotlight
+      const spotlight = new THREE.SpotLight(0xffffaa, 3, 60, Math.PI / 5, 0.4, 1.5);
+      spotlight.position.set(x, 10, z);
+      spotlight.target.position.set(x, 0, z - 15);
+      spotlight.castShadow = true;
+      spotlight.shadow.mapSize.set(512, 512);
+      scene.add(spotlight);
+      scene.add(spotlight.target);
+      
+      // Light cone visual
+      const coneMat = new THREE.MeshBasicMaterial({ color: 0xffffaa, transparent: true, opacity: 0.06, side: THREE.DoubleSide });
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(4, 15, 16, 1, true), coneMat);
+      cone.position.set(x, 2, z - 7);
+      cone.rotation.x = Math.PI;
+      scene.add(cone);
+      spotlightCones.push({ cone, spotlight, baseX: x, baseZ: z });
+    }
+    
+    function createPlayerModel() {
+      playerGroup = new THREE.Group();
+      
+      // We don't see our own body in FPS, but add a simple shadow
+      const shadowGeo = new THREE.CircleGeometry(0.4, 16);
+      const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3 });
+      const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+      shadow.rotation.x = -Math.PI / 2;
+      shadow.position.y = 0.01;
+      playerGroup.add(shadow);
+      
+      scene.add(playerGroup);
+    }
+    
+    function spawnEnemies() {
+      const enemyMat = new THREE.MeshStandardMaterial({ color: 0x5a5a5a, roughness: 0.8 });
+      const headMat = new THREE.MeshStandardMaterial({ color: 0xc9a882, roughness: 0.7 });
+      const helmetMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.6 });
+      const weaponMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.6, roughness: 0.4 });
+      
+      const positions = [
+        { x: -10, z: -35 },
+        { x: 10, z: -35 },
+        { x: -5, z: -30 },
+        { x: 5, z: -30 },
+        { x: 0, z: -25 },
+        { x: -15, z: -22 },
+        { x: 15, z: -22 },
+        { x: -8, z: -38 },
+        { x: 8, z: -38 },
+        { x: 0, z: -33 },
+      ];
+      
+      positions.forEach((pos, i) => {
+        const enemy = new THREE.Group();
+        
+        // Body
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.2, 0.4), enemyMat);
+        body.position.y = 0.6;
+        body.castShadow = true;
+        enemy.add(body);
+        
+        // Head
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.28), headMat);
+        head.position.y = 1.4;
+        head.castShadow = true;
+        enemy.add(head);
+        
+        // Helmet
+        const helmet = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.18, 0.32), helmetMat);
+        helmet.position.y = 1.55;
+        helmet.castShadow = true;
+        enemy.add(helmet);
+        
+        // Weapon
+        const weapon = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.7), weaponMat);
+        weapon.position.set(0.35, 0.9, -0.2);
+        weapon.castShadow = true;
+        enemy.add(weapon);
+        
+        // Detection indicator
+        const indicator = new THREE.Mesh(
+          new THREE.SphereGeometry(0.08, 8, 8),
+          new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0 })
+        );
+        indicator.position.y = 1.8;
+        enemy.add(indicator);
+        
+        enemy.position.set(pos.x, 0, pos.z);
+        enemy.userData = {
+          health: 100,
+          state: 'patrol',
+          speed: 1.5 + Math.random() * 0.5,
+          patrolAngle: Math.random() * Math.PI * 2,
+          patrolRadius: 3 + Math.random() * 3,
+          patrolCenter: new THREE.Vector3(pos.x, 0, pos.z),
+          detectionRange: 25,
+          alertLevel: 0,
+        };
+        
+        scene.add(enemy);
+        enemies.push(enemy);
+      });
+    }
+    
+    // ============================================================
+    // GAME LOOP
+    // ============================================================
+    function gameLoop() {
+      if (gameState !== 'playing') {
+        requestAnimationFrame(gameLoop);
+        return;
+      }
+      
+      const delta = clock.getDelta();
+      
+      updatePlayer(delta);
+      updateEnemies(delta);
+      updateSpotlights(delta);
+      updateHUD();
+      
+      renderer.render(scene, camera);
+      requestAnimationFrame(gameLoop);
+    }
+    
+    function updatePlayer(delta) {
+      // Movement speed
+      const charData = activeCharacter === 'wolf'
+        ? { name: 'WOLF', role: 'THE OPERATOR', baseSpeed: 5 }
+        : { name: 'FALCON', role: 'THE OVERWATCH', baseSpeed: 4 };
+      
+      let speed = charData.baseSpeed;
+      if (isSprinting) speed *= 1.6;
+      if (isCrouching) speed *= 0.5;
+      if (isProne) speed *= 0.3;
+      
+      // Calculate movement
+      const forward = new THREE.Vector3(0, 0, -1);
+      const right = new THREE.Vector3(1, 0, 0);
+      
+      const euler = new THREE.Euler(0, rotY, 0, 'YXZ');
+      forward.applyEuler(euler);
+      right.applyEuler(euler);
+      
+      const moveDir = new THREE.Vector3();
+      if (keys['KeyW']) moveDir.add(forward);
+      if (keys['KeyS']) moveDir.sub(forward);
+      if (keys['KeyA']) moveDir.sub(right);
+      if (keys['KeyD']) moveDir.add(right);
+      
+      if (moveDir.length() > 0) {
+        moveDir.normalize();
+        isMoving = true;
+      } else {
+        isMoving = false;
+      }
+      
+      camera.position.x += moveDir.x * speed * delta;
+      camera.position.z += moveDir.z * speed * delta;
+      
+      // Height based on stance
+      const targetHeight = isProne ? 0.5 : isCrouching ? 1.0 : 1.7;
+      camera.position.y += (targetHeight - camera.position.y) * 10 * delta;
+      
+      // Head bob
+      if (isMoving && !isProne) {
+        const bobSpeed = isSprinting ? 12 : 8;
+        const bobAmount = isCrouching ? 0.02 : 0.04;
+        camera.position.y += Math.sin(performance.now() * 0.001 * bobSpeed) * bobAmount;
+      }
+      
+      // Camera rotation
+      camera.rotation.order = 'YXZ';
+      camera.rotation.y = rotY;
+      camera.rotation.x = rotX;
+      
+      // Player shadow
+      playerGroup.position.x = camera.position.x;
+      playerGroup.position.z = camera.position.z;
+    }
+    
+    function updateEnemies(delta) {
+      const playerPos = camera.position;
+      
+      enemies.forEach(enemy => {
+        const data = enemy.userData;
+        if (data.health <= 0) return;
+        
+        const dist = enemy.position.distanceTo(playerPos);
+        
+        // Detection
+        if (dist < data.detectionRange) {
+          const rate = (1 - dist / data.detectionRange) * 40;
+          data.alertLevel = Math.min(100, data.alertLevel + rate * delta);
+        } else {
+          data.alertLevel = Math.max(0, data.alertLevel - 15 * delta);
+        }
+        
+        // State machine
+        if (data.alertLevel > 70) {
+          data.state = 'attack';
+        } else if (data.alertLevel > 30) {
+          data.state = 'alert';
+        } else {
+          data.state = 'patrol';
+        }
+        
+        // Movement
+        if (data.state === 'patrol') {
+          data.patrolAngle += delta * 0.5;
+          const targetX = data.patrolCenter.x + Math.cos(data.patrolAngle) * data.patrolRadius;
+          const targetZ = data.patrolCenter.z + Math.sin(data.patrolAngle) * data.patrolRadius;
+          enemy.position.x += (targetX - enemy.position.x) * 2 * delta;
+          enemy.position.z += (targetZ - enemy.position.z) * 2 * delta;
+        } else if (data.state === 'alert') {
+          // Look towards player but don't move
+          enemy.lookAt(playerPos.x, enemy.position.y, playerPos.z);
+        } else if (data.state === 'attack') {
+          // Move towards player
+          const dir = new THREE.Vector3().subVectors(playerPos, enemy.position).normalize();
+          enemy.position.x += dir.x * data.speed * 2 * delta;
+          enemy.position.z += dir.z * data.speed * 2 * delta;
+          enemy.lookAt(playerPos.x, enemy.position.y, playerPos.z);
+          
+          // Attack
+          if (dist < 5) {
+            health -= 15 * delta;
+            if (health < 0) health = 0;
+          }
+        }
+        
+        // Alert indicator
+        const indicator = enemy.children[4];
+        if (indicator) {
+          const mat = indicator.material;
+          if (data.alertLevel > 30) {
+            mat.opacity = (data.alertLevel - 30) / 70;
+            mat.color.setHex(data.alertLevel > 70 ? 0xff0000 : 0xffff00);
+          } else {
+            mat.opacity = 0;
+          }
+        }
+      });
+      
+      // Update detection meter
+      let maxAlert = 0;
+      enemies.forEach(e => {
+        if (e.userData.alertLevel > maxAlert) maxAlert = e.userData.alertLevel;
+      });
+      detectionProgress = maxAlert;
+      detectionLevel = detectionProgress < 10 ? 0 : detectionProgress < 30 ? 1 : detectionProgress < 50 ? 2 : detectionProgress < 70 ? 3 : detectionProgress < 90 ? 4 : 5;
+    }
+    
+    function updateSpotlights(delta) {
+      const time = performance.now() * 0.0005;
+      spotlightCones.forEach((sc, i) => {
+        const swing = Math.sin(time + i * 1.5) * 8;
+        sc.spotlight.target.position.x = sc.baseX + swing;
+        sc.spotlight.target.position.z = sc.baseZ - 15;
+      });
+    }
+    
+    function updateHUD() {
+      healthFill.style.width = `${health}%`;
+      healthFill.style.background = health > 60 ? '#e74c3c' : health > 30 ? '#f39c12' : '#c0392b';
+      armorFill.style.width = `${armor}%`;
+      ammoCount.textContent = `${ammo}/${maxAmmo}`;
+      scoreValue.textContent = score.toLocaleString();
+      
+      // Detection dots
+      for (let i = 1; i <= 5; i++) {
+        const dot = document.getElementById(`det-${i}`);
+        if (i <= detectionLevel) {
+          dot.classList.add('active');
+          dot.style.background = detectionLevel >= 4 ? '#e74c3c' : detectionLevel >= 2 ? '#f39c12' : '#FFD700';
+        } else {
+          dot.classList.remove('active');
+          dot.style.background = '#333';
+        }
+      }
+    }
+    
+    // ============================================================
+    // SHOOTING
+    // ============================================================
+    function shoot() {
+      if (ammo <= 0) return;
+      ammo--;
+      
+      // Muzzle flash
+      const flash = new THREE.Mesh(
+        new THREE.SphereGeometry(0.08, 8, 8),
+        new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.9 })
+      );
+      const forward = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation);
+      flash.position.copy(camera.position).add(forward.multiplyScalar(1));
+      scene.add(flash);
+      setTimeout(() => scene.remove(flash), 50);
+      
+      // Raycast for hit detection
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera({ x: 0, y: 0 }, camera);
+      
+      const enemyMeshes = enemies.filter(e => e.userData.health > 0);
+      const intersects = raycaster.intersectObjects(enemyMeshes, true);
+      
+      if (intersects.length > 0) {
+        let hitEnemy = intersects[0].object;
+        // Walk up to find the enemy group
+        while (hitEnemy.parent && !hitEnemy.userData.health) {
+          hitEnemy = hitEnemy.parent;
+        }
+        
+        if (hitEnemy.userData.health > 0) {
+          const isHeadshot = intersects[0].point.y > hitEnemy.position.y + 1.3;
+          const damage = isHeadshot ? 62 : 25; // One-shot kill for headshot
+          hitEnemy.userData.health -= damage;
+          
+          if (hitEnemy.userData.health <= 0) {
+            // Kill
+            score += isHeadshot ? 150 : 100;
+            hitEnemy.children.forEach(child => {
+              if (child.material) {
+                child.material = new THREE.MeshStandardMaterial({ color: 0x8b0000, roughness: 0.9 });
+              }
+            });
+            // Fall over
+            hitEnemy.rotation.x = Math.PI / 2;
+            hitEnemy.position.y = 0.3;
+            
+            // Remove after 5 seconds
+            setTimeout(() => {
+              scene.remove(hitEnemy);
+              const idx = enemies.indexOf(hitEnemy);
+              if (idx > -1) enemies.splice(idx, 1);
+            }, 5000);
+          } else {
+            score += 10;
+          }
+          
+          // Alert nearby
+          enemies.forEach(e => {
+            if (e !== hitEnemy && e.userData.health > 0) {
+              const d = e.position.distanceTo(hitEnemy.position);
+              if (d < 20) e.userData.alertLevel = Math.min(100, e.userData.alertLevel + 40);
+            }
+          });
+        }
+      }
+    }
+    
+    // ============================================================
+    // INPUT
+    // ============================================================
+    window.addEventListener('keydown', (e) => {
+      keys[e.code] = true;
+      
+      if (e.code === 'ShiftLeft') isSprinting = true;
+      if (e.code === 'KeyC' || e.code === 'ControlLeft') {
+        isProne = false;
+        isCrouching = !isCrouching;
+      }
+      if (e.code === 'KeyX') {
+        isCrouching = false;
+        isProne = !isProne;
+      }
+      if (e.code === 'KeyR') ammo = maxAmmo;
+      if (e.code === 'KeyQ') {
+        activeCharacter = activeCharacter === 'wolf' ? 'falcon' : 'wolf';
+        const charData = activeCharacter === 'wolf'
+          ? { name: 'WOLF', role: 'THE OPERATOR', color: '#FFD700' }
+          : { name: 'FALCON', role: 'THE OVERWATCH', color: '#00BFFF' };
+        characterName.textContent = charData.name;
+        characterName.style.color = charData.color;
+        characterRole.textContent = charData.role;
+        
+        // Show message
+        showMessage(`SWITCHED TO ${charData.name}`, 1000);
+      }
+    });
+    
+    window.addEventListener('keyup', (e) => {
+      keys[e.code] = false;
+      if (e.code === 'ShiftLeft') isSprinting = false;
+    });
+    
+    window.addEventListener('mousemove', (e) => {
+      if (document.pointerLockElement !== canvas) return;
+      rotY -= e.movementX * 0.002;
+      rotX -= e.movementY * 0.002;
+      rotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotX));
+    });
+    
+    canvas.addEventListener('click', () => {
+      if (gameState === 'playing') {
+        canvas.requestPointerLock();
+        shoot();
+      }
+    });
+    
+    canvas.addEventListener('mousedown', (e) => {
+      if (e.button === 2) isADS = true;
+    });
+    
+    canvas.addEventListener('mouseup', (e) => {
+      if (e.button === 2) isADS = false;
+    });
+    
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    
+    // ============================================================
+    // UI FUNCTIONS
+    // ============================================================
+    function showMessage(text, duration = 2000) {
+      const msg = document.createElement('div');
+      msg.style.cssText = `
+        position: fixed; top: 35%; left: 50%; transform: translate(-50%, -50%);
+        padding: 0.8rem 2rem; background: rgba(0,0,0,0.8); color: #FFD700;
+        font-size: 1.2rem; font-weight: 700; letter-spacing: 0.2em; z-index: 200;
+        pointer-events: none; border-left: 3px solid #FFD700;
+      `;
+      msg.textContent = text;
+      document.body.appendChild(msg);
+      setTimeout(() => msg.remove(), duration);
+    }
+    
+    function showSubtitle(text, duration = 4000) {
+      const sub = document.createElement('div');
+      sub.style.cssText = `
+        position: fixed; bottom: 15%; left: 50%; transform: translateX(-50%);
+        padding: 0.75rem 1.5rem; background: rgba(0,0,0,0.75); color: #fff;
+        font-size: 1rem; font-style: italic; z-index: 200; pointer-events: none;
+        max-width: 80%; border-left: 3px solid #c0392b; text-align: center;
+      `;
+      sub.textContent = text;
+      document.body.appendChild(sub);
+      setTimeout(() => sub.remove(), duration);
+    }
+    
+    // ============================================================
+    // LOADING & MENU
+    // ============================================================
+    async function loadGame() {
+      const messages = [
+        'LOADING TACTICAL SYSTEMS...',
+        'INITIALIZING PROTOCOL 313...',
+        'CALIBRATING DRONE SWARM...',
+        'SYNCING SQUAD 313...',
+        'DEPLOYING TO SECTOR 313...',
+      ];
+      
+      for (let i = 0; i <= 100; i += 2) {
+        loadingBar.style.width = `${i}%`;
+        if (i % 20 === 0 && i / 20 < messages.length) {
+          loadingText.textContent = messages[i / 20];
+        }
+        await new Promise(r => setTimeout(r, 25));
+      }
+      
+      loadingText.textContent = 'READY FOR DEPLOYMENT';
+      await new Promise(r => setTimeout(r, 500));
+      
+      loadingScreen.style.opacity = '0';
+      loadingScreen.style.transition = 'opacity 0.5s';
+      await new Promise(r => setTimeout(r, 500));
+      loadingScreen.style.display = 'none';
+      mainMenu.style.display = 'flex';
+      gameState = 'menu';
+    }
+    
+    function startGame() {
+      gameState = 'playing';
+      mainMenu.style.display = 'none';
+      gameContainer.style.display = 'block';
+      hud.style.display = 'block';
+      
+      initThreeJS();
+      clock.start();
+      
+      showSubtitle('COMMAND: "Wolf, Falcon. Execute Protocol 313."');
+      setTimeout(() => showSubtitle('FALCON: "In position. Watch the spotlights, Wolf."'), 5000);
+      
+      gameLoop();
+    }
+    
+    // ============================================================
+    // EVENT LISTENERS
+    // ============================================================
+    btnCampaign.addEventListener('click', startGame);
+    document.getElementById('btn-multiplayer').addEventListener('click', () => {
+      showMessage('MULTIPLAYER COMING SOON!');
+    });
+    document.getElementById('btn-settings').addEventListener('click', () => {
+      showMessage('SETTINGS COMING SOON!');
+    });
+    
+    window.addEventListener('resize', () => {
+      if (renderer) {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+    });
+    
+    // ============================================================
+    // START
+    // ============================================================
+    loadGame();
+  </script>
+</body>
+</html>
